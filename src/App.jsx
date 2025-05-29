@@ -1,6 +1,7 @@
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import ProofViewer from './components/ProofViewer';
+import ImageGallery from './components/imageGallery';
 
 function App() {
   return (
@@ -14,7 +15,7 @@ function App() {
       <main className="max-w-4xl mx-auto p-6">
         <Auth />
         <Dashboard />
-        <ProofViewer />
+        <ImageGallery />
       </main>
     </div>
   );
