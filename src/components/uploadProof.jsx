@@ -3,12 +3,16 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { storage, db, auth } from '../firebase';
 
+
 export default function UploadProof() {
   const [file, setFile] = useState(null);
 
-  const handleUpload = async () => {
-    if (!file) return alert('Select a file first');
+  //file upload state
+  const[fileUpload, setFileUpload] = useState(null);
 
+  /*const handleUpload = async () => {
+    if (!file) return alert('Select a file first');
+    console.log(file.type.name);
     const fileRef = ref(storage, `proofs/${file.name}`);
     await uploadBytes(fileRef, file);
     const url = await getDownloadURL(fileRef);
@@ -24,22 +28,37 @@ export default function UploadProof() {
 
     alert('Upload complete!');
   };
+  */
+
+    //upload file funct
+    const uploadFile = async () => {
+      if (!fileUpload) return alert('Select a file first');
+      console.log(fileUpload.type.name);
+  
+      const filesFolderRef = ref(storage, `proofFiles/${fileUpload.name}`);
+  
+      try {
+        await uploadBytes(filesFolderRef, fileUpload);
+  
+      } catch (err) {
+        console.error(err);
+      }
+      
+  
+    };
 
   return (
     <div className="bg-charcoal p-4 rounded text-navy mb-6">
       <h3 className="mb-2 font-semibold">Upload a Proof</h3>
-      <input
+      
+
+      <div>
+        <input 
         type="file"
-        accept=".jpg,.jpeg,.png,.pdf"
-        onChange={(e) => setFile(e.target.files[0])}
-        className="block mb-2"
-      />
-      <button
-        onClick={handleUpload}
-        className="bg-navy px-4 py-2 rounded hover:bg-opacity-90"
-      >
-        Upload
-      </button>
+        onChange={(e) => setFileUpload(e.target.files[0])}
+        ></input>
+        <button onClick={(e) => uploadFile(e)}>Upload File</button>
+      </div>
     </div>
   );
 }

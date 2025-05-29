@@ -1,4 +1,29 @@
+import { useEffect, useState } from 'react';
+import { ref, uploadBytes, getDownloadURL, listAll } from 'firebase/storage';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { storage, db, auth } from '../firebase';
+import { v4 } from "uuid";
+import { response } from 'express';
+
 export default function ProofViewer({ url, type }) {
+  const [imageList, setImageList] = useState([]);
+
+  //const imageListRef = ref(storage, "proofFiles/");
+
+  useEffect(() => {
+   /*listAll(imageListRef).then((response) => {
+      console.log(response);
+      response.items.forEach((item) => {
+        getDownloadURL(item).then((url) => {
+          setImageList((prev) => [...prev, url]);
+        })
+      })
+    });*/
+  }, []);
+
+
+
+
   return (
     <div className="mb-4 p-4 bg-charcoal rounded shadow-md">
       {type === 'pdf' ? (
