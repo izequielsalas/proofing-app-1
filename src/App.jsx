@@ -1,7 +1,9 @@
+import { Routes, Route } from 'react-router-dom';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import ProofViewer from './components/ProofViewer';
-import ImageGallery from './components/imageGallery';
+import ImageGallery from './components/ImageGallery';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -13,9 +15,21 @@ function App() {
       </header>
 
       <main className="max-w-4xl mx-auto p-6">
-        <Auth />
-        <Dashboard />
-        <ImageGallery />
+        <Routes>
+        <Route path="/auth" element={<Auth />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+          <Route path="/" element={<Auth />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/gallery" element={<ImageGallery />} />
+          <Route path="/proof/:id" element={<ProofViewer />} />
+        </Routes>
       </main>
     </div>
   );
