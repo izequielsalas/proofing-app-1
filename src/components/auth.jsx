@@ -26,6 +26,7 @@ export default function Auth() {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       // Navigate will trigger via onAuthStateChanged
+      navigate('/createProfile');
     } catch (err) {
       console.error("Registration error:", err.message);
     }

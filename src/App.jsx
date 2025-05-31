@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import ProofViewer from './components/ProofViewer';
 import ImageGallery from './components/ImageGallery';
 import ProtectedRoute from './components/ProtectedRoute';
+import CreateProfile from './components/createProfile';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/gallery" element={<ImageGallery />} />
           <Route path="/proof/:id" element={<ProofViewer />} />
+          <Route path="/createProfile" element={<CreateProfile />} />
         </Routes>
       </main>
     </div>
