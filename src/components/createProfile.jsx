@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { db, auth } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 
 export default function CreateProfile() {
   const [name, setName] = useState('');
@@ -9,6 +10,7 @@ export default function CreateProfile() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const user = auth.currentUser;
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,6 +26,7 @@ export default function CreateProfile() {
         email: user.email,
         createdAt: new Date()
       });
+      navigate('/dashboard');
       alert('Profile created!');
     } catch (err) {
       console.error('Error saving profile:', err);
