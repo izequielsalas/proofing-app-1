@@ -29,15 +29,19 @@ export default function ImageGallery({ folderPath = "proofFiles" }) {
     <div className="image-gallery">
       {imageUrls.length === 0 && <p>Loading images...</p>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
-        {imageUrls.map((url, idx) => (
+      {imageUrls.map((url, idx) => (
+        <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
           <img
-            key={idx}
             src={url}
-            alt={`Image ${idx + 1}`}
+            alt={`Proof ${idx + 1}`}
+            className="rounded border shadow hover:scale-105 transition-transform"
             style={{ width: "200px", height: "auto", objectFit: "cover" }}
           />
-        ))}
+        </a>
+      ))}
+
       </div>
     </div>
   );
 }
+
