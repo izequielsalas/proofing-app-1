@@ -1,63 +1,60 @@
-import { useState } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { storage, db, auth } from '../firebase';
-
+import { useRef, useState } from 'react';
+import { ref, uploadBytes } from 'firebase/storage';
+import { storage } from '../firebase';
 
 export default function UploadProof() {
-  const [file, setFile] = useState(null);
+  const [fileUpload, setFileUpload] = useState(null);
+  const fileInputRef = useRef();
 
-  //file upload state
-  const[fileUpload, setFileUpload] = useState(null);
+  const uploadFile = async () => {
+    if (!fileUpload) return alert('Select a file first');
+    
+    if (fileUpload.type !== 'application/pdf') {
+      return alert('Only PDF files are allowed.');
+    }
 
-  /*const handleUpload = async () => {
-    if (!file) return alert('Select a file first');
-    console.log(file.type.name);
-    const fileRef = ref(storage, `proofs/${file.name}`);
-    await uploadBytes(fileRef, file);
-    const url = await getDownloadURL(fileRef);
+    const filesFolderRef = ref(storage, `proofFiles/${fileUpload.name}`);
 
-    await addDoc(collection(db, 'proofs'), {
-      url,
-      type: file.type.includes('pdf') ? 'pdf' : 'jpg',
-      client: 'Example Client',
-      status: 'pending',
-      createdAt: serverTimestamp(),
-      uploadedBy: auth.currentUser.email,
-    });
-
-    alert('Upload complete!');
+    try {
+      await uploadBytes(filesFolderRef, fileUpload);
+      alert('Upload complete!');
+    } catch (err) {
+      console.error(err);
+    }
   };
-  */
-
-    //upload file funct
-    const uploadFile = async () => {
-      if (!fileUpload) return alert('Select a file first');
-      console.log(fileUpload.type.name);
-  
-      const filesFolderRef = ref(storage, `proofFiles/${fileUpload.name}`);
-  
-      try {
-        await uploadBytes(filesFolderRef, fileUpload);
-  
-      } catch (err) {
-        console.error(err);
-      }
-      
-  
-    };
 
   return (
     <div className="bg-charcoal p-4 rounded text-navy mb-6">
       <h3 className="mb-2 font-semibold">Upload a Proof</h3>
-      
 
-      <div>
-        <input 
-        type="file"
-        onChange={(e) => setFileUpload(e.target.files[0])}
-        ></input>
-        <button onClick={(e) => uploadFile(e)}>Upload File</button>
+      <div className="flex items-center gap-4">
+        {/* Hidden PDF-only file input */}
+        <input
+          type="file"
+          accept="application/pdf"
+          ref={fileInputRef}
+          onChange={(e) => setFileUpload(e.target.files[0])}
+          className="hidden"
+        />
+
+        {/* Custom "Choose File" button */}
+        <button
+          onClick={() => fileInputRef.current.click()}
+          
+        >
+          Choose PDF
+        </button>
+
+        {/* Upload button */}
+        <button
+          onClick={uploadFile}
+          
+        >
+          Upload File
+        </button>
+
+        {/* Optional: Show selected file name */}
+        {fileUpload && <span className="text-sm text-navy">{fileUpload.name}</span>}
       </div>
     </div>
   );

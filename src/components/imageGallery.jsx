@@ -26,22 +26,27 @@ export default function ImageGallery({ folderPath = "proofFiles" }) {
   }, [folderPath]);
 
   return (
-    <div className="image-gallery">
-      {imageUrls.length === 0 && <p>Loading images...</p>}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
-      {imageUrls.map((url, idx) => (
-        <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
-          <img
-            src={url}
-            alt={`Proof ${idx + 1}`}
-            className="rounded border shadow hover:scale-105 transition-transform"
-            style={{ width: "200px", height: "auto", objectFit: "cover" }}
-          />
-        </a>
-      ))}
+    <div className="mt-6">
+      {imageUrls.length === 0 && <p className="text-white">Loading images...</p>}
 
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        {imageUrls.map((url, idx) => (
+          <a key={idx} href={url} target="_blank" rel="noopener noreferrer">
+            <img
+              src={url}
+              alt={`Proof ${idx + 1}`}
+              loading="lazy"
+              className="rounded border shadow transition-transform transform hover:scale-105"
+              style={{
+                width: "100%",
+                height: "auto",
+                objectFit: "cover",
+                willChange: "transform", // GPU-accelerated
+              }}
+            />
+          </a>
+        ))}
       </div>
     </div>
   );
 }
-

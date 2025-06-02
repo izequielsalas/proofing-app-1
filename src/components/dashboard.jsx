@@ -33,6 +33,7 @@ export default function Dashboard() {
         <button onClick={() => signOut(auth)} className="bg-navy px-4 py-2 rounded">Logout</button>
       </div>
       <ImageGallery />
+      <UploadProof />
       {proofs.map((proof) => (
         <ProofViewer key={proof.id} url={proof.url} type={proof.type} />
       ))}
