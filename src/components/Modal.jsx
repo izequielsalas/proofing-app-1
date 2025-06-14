@@ -1,9 +1,34 @@
 import { motion } from "framer-motion";
+import React, { useState } from "react";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../firebase"; // adjust if needed
+
 import { X } from "lucide-react";
 
 export default function Modal({ project, onClose }) {
   const stopPropagation = (e) => e.stopPropagation();
   const isPDF = project.fileUrl?.endsWith(".pdf");
+
+  const [showCommentBox, setShowCommentBox] = useState(false);
+  const [notes, setNotes] = useState("");
+
+
+const onDecline = async (id, notes = "") => {
+  setLoadingId(id);
+  try {
+    await updateDoc(doc(db, "proofs", id), {
+      status: "declined",
+      responseAt: serverTimestamp(),
+      notes: notes.trim(), // optional: remove leading/trailing whitespace
+    });
+    setActiveProof(null);
+  } catch (err) {
+    console.error(err);
+    alert("Error declining proof.");
+  }
+  setLoadingId(null);
+};
+ 
 
   return (
     <motion.div
@@ -48,17 +73,18 @@ export default function Modal({ project, onClose }) {
           This is where you can add more details about the project — description,
           tools used, links, etc.
         </p>
-        <a
-          href={project.fileUrl}
-          download
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block bg-white-600 border border-transparent hover:border-navy transition-all duration-200 text-navy px-4 py-2 rounded mb-4"
-        >
-          Download Proof
-        </a>
+
 
         <div className="flex gap-3 mb-4">
+          <a
+            href={project.fileUrl}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="button"
+          >
+            Download Proof
+          </a>          
           <button
             className="px-4 py-2 rounded"
             onClick={() => onApprove(project.id, notes)}
@@ -66,22 +92,30 @@ export default function Modal({ project, onClose }) {
             Approve
           </button>
           <button
+            onClick={() => {
+              if (!showCommentBox) {
+                setShowCommentBox(true);
+              } else {
+                onDecline(project.id, notes); // pass notes here
+              }
+            }}
             className="px-4 py-2 rounded"
-            onClick={() => onDecline(project.id, notes)}
           >
-            Decline
+            {showCommentBox ? "Submit Decline" : "Decline"}
           </button>
+
         </div>
 
-        <textarea
-          value={project.notes || ""}
-          onChange={(e) =>
-            project.setNotes?.(e.target.value) // optional if using state from parent
-          }
-          placeholder="Leave comments or change requests..."
-          className="w-full p-3 border border-gray-300 rounded mb-4 resize-none"
-          rows={4}
-        />
+        {showCommentBox && (
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Leave comments or change requests..."
+            className="w-full p-3 border border-gray-300 rounded mb-4 resize-none"
+            rows={4}
+          />
+        )}
+
         
 
       </motion.div>
