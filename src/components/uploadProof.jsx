@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { ref, uploadBytes } from 'firebase/storage';
-import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { storage, db } from '../firebase';
 
 export default function UploadProof() {
   const [fileUpload, setFileUpload] = useState(null);
@@ -16,10 +17,24 @@ export default function UploadProof() {
     const filesFolderRef = ref(storage, `proofFiles/${fileUpload.name}`);
 
     try {
+      // Upload to Firebase Storage
       await uploadBytes(filesFolderRef, fileUpload);
+      const downloadURL = await getDownloadURL(filesFolderRef);
+
+      // Add metadata to Firestore
+      await addDoc(collection(db, 'proofs'), {
+        fileUrl: downloadURL,
+        fileType: 'pdf',
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+
       alert('Upload complete!');
+      setFileUpload(null);
+      fileInputRef.current.value = '';
     } catch (err) {
       console.error(err);
+      alert('Upload failed.');
     }
   };
 

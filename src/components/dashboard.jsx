@@ -5,6 +5,7 @@ import { auth, db } from '../firebase';
 import UploadProof from './UploadProof';
 import ProofViewer from './ProofViewer';
 import ImageGallery from './ImageGallery';
+import ProofGrid from './ProofGrid';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -32,11 +33,8 @@ export default function Dashboard() {
         <h2 className="text-xl font-bold">Welcome, {user.email}</h2>
         <button onClick={() => signOut(auth)} className="bg-navy px-4 py-2 rounded">Logout</button>
       </div>
-      <ImageGallery />
+      <ProofGrid />
       <UploadProof />
-      {proofs.map((proof) => (
-        <ProofViewer key={proof.id} url={proof.url} type={proof.type} />
-      ))}
     </div>
   );
 }
