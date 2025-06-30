@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* Cesar Graphics Color Palette */
+:root {
+  --cesar-primary: #1e3a8a;     /* Deep blue */
+  --cesar-secondary: #3b82f6;   /* Bright blue */
+  --cesar-accent: #f59e0b;      /* Orange/amber accent */
+  --cesar-success: #10b981;     /* Green for approvals */
+  --cesar-warning: #f59e0b;     /* Amber for pending */
+  --cesar-danger: #ef4444;      /* Red for declined */
+  --cesar-dark: #1f2937;        /* Dark gray */
+  --cesar-light: #f9fafb;       /* Light gray background */
+  --cesar-white: #ffffff;
+}
+
+/* Custom color classes for your components */
+.bg-navy { background-color: var(--cesar-primary); }
+.text-navy { color: var(--cesar-primary); }
+.border-navy { border-color: var(--cesar-primary); }
+.hover\:bg-navy:hover { background-color: var(--cesar-primary); }
+.hover\:text-navy:hover { color: var(--cesar-primary); }
+
+.bg-charcoal { background-color: var(--cesar-dark); }
+.text-charcoal { color: var(--cesar-dark); }
+
+.bg-grey { background-color: var(--cesar-light); }
+.text-grey { color: #6b7280; }
+
+/* Enhanced button styles */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -8,20 +35,98 @@ button {
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
 }
+
 button:hover {
-  border-color: navy;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+
+button:active {
+  transform: translateY(0);
+}
+
 button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  outline: 2px solid var(--cesar-secondary);
+  outline-offset: 2px;
 }
 
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Primary button styling */
+.btn-primary {
+  background-color: var(--cesar-primary);
+  color: var(--cesar-white);
+  border-color: var(--cesar-primary);
+}
+
+.btn-primary:hover {
+  background-color: var(--cesar-secondary);
+  border-color: var(--cesar-secondary);
+}
+
+/* Secondary button styling */
+.btn-secondary {
+  background-color: transparent;
+  color: var(--cesar-primary);
+  border-color: var(--cesar-primary);
+}
+
+.btn-secondary:hover {
+  background-color: var(--cesar-primary);
+  color: var(--cesar-white);
+}
+
+/* Success button styling */
+.btn-success {
+  background-color: var(--cesar-success);
+  color: var(--cesar-white);
+  border-color: var(--cesar-success);
+}
+
+.btn-success:hover {
+  background-color: #059669;
+  border-color: #059669;
+}
+
+/* Danger button styling */
+.btn-danger {
+  background-color: var(--cesar-danger);
+  color: var(--cesar-white);
+  border-color: var(--cesar-danger);
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+/* Input styling */
 .input {
-  @apply block w-full p-2 mb-3 border border-gray-300 rounded;
+  @apply block w-full p-3 mb-3 border border-gray-300 rounded-lg;
+  transition: all 0.2s ease;
+  font-size: 1rem;
 }
 
+.input:focus {
+  @apply ring-2 ring-blue-500 border-blue-500;
+  outline: none;
+}
+
+.input:hover {
+  @apply border-gray-400;
+}
+
+/* Custom button class for compatibility */
 .button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -30,10 +135,299 @@ button:focus-visible {
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.25s;
-  background-color: transparent;
+  transition: all 0.25s ease;
+  background-color: var(--cesar-primary);
+  color: var(--cesar-white);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .button:hover {
-  border-color: navy;
+  background-color: var(--cesar-secondary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: var(--cesar-white);
+  text-decoration: none;
+}
+
+/* Status indicators */
+.status-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.status-approved {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.status-declined {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print-friendly styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-full-width {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+/* Responsive typography */
+@media (max-width: 640px) {
+  .responsive-text {
+    font-size: 0.875rem;
+  }
+  
+  button {
+    padding: 0.5em 1em;
+    font-size: 0.9em;
+  }
+}
+
+/* Loading spinner */
+.spinner {
+  border: 2px solid #f3f4f6;
+  border-top: 2px solid var(--cesar-primary);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Card styles for consistency */
+.card {
+  background: var(--cesar-white);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* File upload drag and drop styles */
+.upload-area {
+  transition: all 0.2s ease;
+}
+
+.upload-area.drag-over {
+  border-color: var(--cesar-secondary);
+  background-color: #eff6ff;
+}
+
+/* Header gradient for brand identity */
+.header-gradient {
+  background: linear-gradient(135deg, var(--cesar-primary) 0%, var(--cesar-secondary) 100%);
+}
+
+/* Add this to your index.css - UNIFIED BUTTON SYSTEM */
+
+/* Base button reset - applies to ALL buttons */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.75em 1.5em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  min-height: 44px; /* Touch-friendly */
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--cesar-secondary);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* PRIMARY BUTTONS - Main actions */
+.btn-primary,
+button:not([class*="btn-"]):not(.unstyled) {
+  background-color: var(--cesar-primary);
+  color: var(--cesar-white);
+  border-color: var(--cesar-primary);
+}
+
+.btn-primary:hover,
+button:not([class*="btn-"]):not(.unstyled):hover {
+  background-color: var(--cesar-secondary);
+  border-color: var(--cesar-secondary);
+  color: var(--cesar-white);
+}
+
+/* SECONDARY BUTTONS - Less prominent actions */
+.btn-secondary {
+  background-color: transparent;
+  color: var(--cesar-primary);
+  border-color: var(--cesar-primary);
+}
+
+.btn-secondary:hover {
+  background-color: var(--cesar-primary);
+  color: var(--cesar-white);
+}
+
+/* SUCCESS BUTTONS - Approve actions */
+.btn-success {
+  background-color: var(--cesar-success);
+  color: var(--cesar-white);
+  border-color: var(--cesar-success);
+}
+
+.btn-success:hover {
+  background-color: #059669;
+  border-color: #059669;
+}
+
+/* DANGER BUTTONS - Decline/Delete actions */
+.btn-danger {
+  background-color: var(--cesar-danger);
+  color: var(--cesar-white);
+  border-color: var(--cesar-danger);
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+/* GHOST BUTTONS - Subtle actions */
+.btn-ghost {
+  background-color: transparent;
+  color: var(--cesar-dark);
+  border-color: transparent;
+}
+
+.btn-ghost:hover {
+  background-color: #f3f4f6;
+  color: var(--cesar-primary);
+}
+
+/* UNSTYLED - For custom styled buttons */
+.btn-unstyled,
+.unstyled {
+  all: unset;
+  cursor: pointer;
+}
+
+/* SIZE VARIANTS */
+.btn-sm {
+  padding: 0.5em 1em;
+  font-size: 0.875em;
+  min-height: 36px;
+}
+
+.btn-lg {
+  padding: 1em 2em;
+  font-size: 1.125em;
+  min-height: 52px;
+}
+
+/* FULL WIDTH */
+.btn-full {
+  width: 100%;
+}
+
+/* LOADING STATE */
+.btn-loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.btn-loading::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }

@@ -9,28 +9,51 @@ import CreateProfile from './components/createProfile';
 function App() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      <header className="bg-navy text-navy py-6 shadow">
+      <header className="header-gradient text-white py-6 shadow-lg">
         <h1 className="text-3xl font-bold text-center">
-          Printshop Proofing App
+          Cesar Graphics - Proofing Portal
         </h1>
       </header>
 
-      <main className="max-w-4xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-6">
         <Routes>
-        <Route path="/auth" element={<Auth />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
+          {/* Public routes */}
           <Route path="/" element={<Auth />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/gallery" element={<ImageGallery />} />
-          <Route path="/proof/:id" element={<ProofViewer />} />
-          <Route path="/createProfile" element={<CreateProfile />} />
+          <Route path="/auth" element={<Auth />} />
+          
+          {/* Protected routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gallery"
+            element={
+              <ProtectedRoute>
+                <ImageGallery />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/proof/:id"
+            element={
+              <ProtectedRoute>
+                <ProofViewer />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/createProfile"
+            element={
+              <ProtectedRoute>
+                <CreateProfile />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </main>
     </div>
