@@ -19,7 +19,6 @@ const firebaseConfig = {
 };
 =======
 const firebaseConfig = {*};
->>>>>>> b1a40d0d735285e5ad535a668900c823c4fdf722
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
