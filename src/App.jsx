@@ -9,6 +9,7 @@ import CreateProfile from './components/createProfile';
 import UserManagement from './components/UserManagement'; // Add if you have this component
 import UnauthorizedPage from './components/UnauthorizedPage'; // Add if you have this component
 import PrivateBrowsingNotice from './components/PrivateBrowsingNotice'; // Add this import
+import AuthDebugger from './components/AuthDebugger';
 
 function App() {
   return (
@@ -77,6 +78,7 @@ function App() {
         
         {/* Private Browsing Notice */}
         <PrivateBrowsingNotice />
+        <AuthDebugger />
       </div>
     </AuthProvider>
   );

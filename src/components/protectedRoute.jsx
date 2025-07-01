@@ -25,24 +25,31 @@ export default function ProtectedRoute({ children, requireRole = null }) {
       return;
     }
 
-    // If user exists but no profile and we're not already on createProfile page
-    if (currentUser && !userProfile && !firestoreError && window.location.pathname !== '/createProfile') {
-      console.log('User exists but no profile found, redirecting to create profile');
-      navigate('/createProfile');
+    // Special case: If user has a profile but is on createProfile page, redirect to dashboard
+    if (currentUser && userProfile && window.location.pathname === '/createProfile') {
+      console.log('User has profile but is on createProfile page, redirecting to dashboard');
+      navigate('/dashboard');
       return;
     }
 
-    // If we have firestore error, continue anyway (fallback profile should exist)
-    if (currentUser && (userProfile || firestoreError)) {
+    // If user exists and has profile, check role requirements
+    if (currentUser && userProfile) {
       // If specific role is required and user doesn't have it
-      if (requireRole && userProfile?.role !== requireRole) {
-        console.log(`Role required: ${requireRole}, user has: ${userProfile?.role}`);
+      if (requireRole && userProfile.role !== requireRole) {
+        console.log(`Role required: ${requireRole}, user has: ${userProfile.role}`);
         navigate('/unauthorized');
         return;
       }
       
       console.log('All checks passed, allowing access');
       setChecking(false);
+      return;
+    }
+
+    // If user exists but no profile and we're not already on createProfile page
+    if (currentUser && !userProfile && window.location.pathname !== '/createProfile') {
+      console.log('User exists but no profile found, redirecting to create profile');
+      navigate('/createProfile');
       return;
     }
 
@@ -58,6 +65,13 @@ export default function ProtectedRoute({ children, requireRole = null }) {
       }, 3000); // Wait 3 seconds for profile to load
 
       return () => clearTimeout(timeout);
+    }
+
+    // If we're on createProfile page and have no profile, that's fine - let them create it
+    if (currentUser && !userProfile && window.location.pathname === '/createProfile') {
+      console.log('User on createProfile page without profile - this is correct');
+      setChecking(false);
+      return;
     }
 
   }, [currentUser, userProfile, loading, navigate, requireRole, firestoreError]);

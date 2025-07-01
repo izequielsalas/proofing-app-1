@@ -23,12 +23,58 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user ? 'User logged in' : 'User logged out');
+    let profileUnsubscribe = null;
+
+    const authUnsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user ? `User logged in: ${user.email}` : 'User logged out');
       
+      // Clean up previous profile listener
+      if (profileUnsubscribe) {
+        profileUnsubscribe();
+        profileUnsubscribe = null;
+      }
+
       if (user) {
         setCurrentUser(user);
-        await handleUserProfile(user);
+        
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          
+          if (isPrivate) {
+            // In private browsing, use one-time fetch
+            console.log('Private browsing detected, using one-time fetch for user profile');
+            await fetchUserProfileOnce(userDocRef, user);
+          } else {
+            // Normal browsing, use real-time listener
+            console.log('Setting up real-time listener for user profile');
+            profileUnsubscribe = onSnapshot(
+              userDocRef, 
+              (docSnapshot) => {
+                console.log('User profile snapshot received, exists:', docSnapshot.exists());
+                if (docSnapshot.exists()) {
+                  const profileData = docSnapshot.data();
+                  console.log('Profile data loaded:', { role: profileData.role, email: profileData.email });
+                  setUserProfile(profileData);
+                  setLoading(false);
+                  setFirestoreError(false);
+                } else {
+                  console.log('User profile does not exist, creating default profile');
+                  createUserProfile(user);
+                }
+              },
+              (error) => {
+                console.error('Firestore listener error:', error);
+                setFirestoreError(true);
+                // Fallback to one-time fetch
+                fetchUserProfileOnce(userDocRef, user);
+              }
+            );
+          }
+        } catch (error) {
+          console.error('Error setting up user profile listener:', error);
+          setFirestoreError(true);
+          setLoading(false);
+        }
       } else {
         setCurrentUser(null);
         setUserProfile(null);
@@ -36,57 +82,23 @@ export function AuthProvider({ children }) {
       }
     });
 
-    return unsubscribe;
-  }, [isPrivate]);
-
-  const handleUserProfile = async (user) => {
-    try {
-      const userDocRef = doc(db, 'users', user.uid);
-      
-      if (isPrivate) {
-        // In private browsing, use one-time fetch instead of real-time listener
-        console.log('Private browsing detected, using one-time fetch for user profile');
-        await fetchUserProfileOnce(userDocRef, user);
-      } else {
-        // Normal browsing, use real-time listener
-        const unsubscribeProfile = onSnapshot(
-          userDocRef, 
-          (doc) => {
-            console.log('User profile snapshot received');
-            if (doc.exists()) {
-              const profileData = doc.data();
-              setUserProfile(profileData);
-            } else {
-              console.log('User profile does not exist, creating default profile');
-              createUserProfile(user);
-            }
-            setLoading(false);
-            setFirestoreError(false);
-          },
-          (error) => {
-            console.error('Firestore listener error:', error);
-            setFirestoreError(true);
-            // Fallback to one-time fetch
-            fetchUserProfileOnce(userDocRef, user);
-          }
-        );
-        
-        return () => unsubscribeProfile();
+    // Cleanup function
+    return () => {
+      authUnsubscribe();
+      if (profileUnsubscribe) {
+        profileUnsubscribe();
       }
-    } catch (error) {
-      console.error('Error handling user profile:', error);
-      setFirestoreError(true);
-      setLoading(false);
-    }
-  };
+    };
+  }, [isPrivate]);
 
   const fetchUserProfileOnce = async (userDocRef, user) => {
     try {
+      console.log('Fetching user profile once...');
       const docSnap = await getDoc(userDocRef);
       if (docSnap.exists()) {
         const profileData = docSnap.data();
         setUserProfile(profileData);
-        console.log('User profile loaded:', profileData.role);
+        console.log('User profile loaded via one-time fetch:', profileData.role);
       } else {
         console.log('User profile does not exist, creating default profile');
         await createUserProfile(user);
@@ -111,12 +123,14 @@ export function AuthProvider({ children }) {
           canManageUsers: false
         }
       };
+      console.log('Using fallback profile');
       setUserProfile(fallbackProfile);
       setLoading(false);
     }
   };
 
   const createUserProfile = async (user) => {
+    console.log('Creating new user profile for:', user.email);
     const userRef = doc(db, 'users', user.uid);
     const defaultProfile = {
       uid: user.uid,
@@ -138,11 +152,13 @@ export function AuthProvider({ children }) {
     try {
       await setDoc(userRef, defaultProfile);
       setUserProfile(defaultProfile);
+      setLoading(false);
       console.log('User profile created successfully');
     } catch (error) {
       console.error('Error creating user profile:', error);
       // Set profile in memory even if Firestore write fails
       setUserProfile(defaultProfile);
+      setLoading(false);
     }
   };
 
@@ -166,7 +182,8 @@ export function AuthProvider({ children }) {
   const refreshUserProfile = async () => {
     if (currentUser) {
       setLoading(true);
-      await handleUserProfile(currentUser);
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      await fetchUserProfileOnce(userDocRef, currentUser);
     }
   };
 
