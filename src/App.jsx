@@ -78,7 +78,6 @@ function App() {
         
         {/* Private Browsing Notice */}
         <PrivateBrowsingNotice />
-        <AuthDebugger />
       </div>
     </AuthProvider>
   );
