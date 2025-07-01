@@ -5,9 +5,10 @@ import { getFirestore, connectFirestoreEmulator, enableNetwork, disableNetwork }
 import { getStorage } from "firebase/storage";
 import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
 
+
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCufeuyxlhqRCyuxqGqA_V9smEy9lIwSCI",
+ apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "proofingapp1.firebaseapp.com",
   projectId: "proofingapp1",
   storageBucket: "proofingapp1.firebasestorage.app",

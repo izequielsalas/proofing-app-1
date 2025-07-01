@@ -1,6 +1,13 @@
 // src/components/dashboard.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, where } from 'firebase/firestore';
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  where, 
+  serverTimestamp 
+} from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { Link } from 'react-router-dom';
 import { db, auth } from '../firebase';
@@ -18,60 +25,136 @@ export default function Dashboard() {
   
   const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
 
+// Add these state variables at the top of your Dashboard component (after existing states)
+  const [uploadedProofs, setUploadedProofs] = useState([]);
+  const [assignedProofs, setAssignedProofs] = useState([]);
+
+  // Temporary debug version - replace your useEffect with this to see what's happening
+
+// Replace your useEffect with this simpler version (no indexes needed)
   useEffect(() => {
     if (!currentUser || !userProfile) return;
 
-    // Build query based on user role
-    let q;
     if (isAdmin()) {
       // Admins see all proofs
-      q = query(collection(db, 'proofs'));
+      const q = query(collection(db, 'proofs'), orderBy('createdAt', 'desc'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+        setProofs(data);
+        const newStats = data.reduce((acc, proof) => {
+          acc.total++;
+          acc[proof.status] = (acc[proof.status] || 0) + 1;
+          return acc;
+        }, { pending: 0, approved: 0, declined: 0, total: 0 });
+        setStats(newStats);
+      });
+      return unsub;
+      
     } else if (isClient()) {
-      // Clients see only proofs assigned to them
-      q = query(
-        collection(db, 'proofs'),
-        where('assignedTo', 'array-contains', userProfile.uid)
-      );
+      // Clients see their proofs
+      const q = query(collection(db, 'proofs'), where('clientId', '==', userProfile.clientId || userProfile.uid));
+      const unsub = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
+          .sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+        setProofs(data);
+        const newStats = data.reduce((acc, proof) => {
+          acc.total++;
+          acc[proof.status] = (acc[proof.status] || 0) + 1;
+          return acc;
+        }, { pending: 0, approved: 0, declined: 0, total: 0 });
+        setStats(newStats);
+      });
+      return unsub;
+      
     } else if (isDesigner()) {
-      // Designers see proofs assigned to them or uploaded by them
-      q = query(collection(db, 'proofs'));
-    } else {
-      // Default fallback
-      q = query(collection(db, 'proofs'));
-    }
+      // For designers - use separate queries without orderBy
+      const unsubscribers = [];
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // Additional filtering for designers and clients
-      const filteredData = isClient() 
-        ? data.filter(proof => 
-            proof.assignedTo?.includes(userProfile.uid) || 
-            proof.clientId === userProfile.uid
-          )
-        : isDesigner()
-        ? data.filter(proof => 
-            proof.assignedTo?.includes(userProfile.uid) || 
-            proof.uploadedBy === userProfile.uid
-          )
-        : data;
-      
-      setProofs(filteredData);
-      
-      // Calculate stats
-      const newStats = filteredData.reduce((acc, proof) => {
-        acc.total++;
-        acc[proof.status] = (acc[proof.status] || 0) + 1;
-        return acc;
-      }, { pending: 0, approved: 0, declined: 0, total: 0 });
-      setStats(newStats);
-    });
-    
-    return unsub;
+      // Query uploaded proofs (no orderBy)
+      const uploadedQuery = query(collection(db, 'proofs'), where('uploadedBy', '==', userProfile.uid));
+      const unsubUploaded = onSnapshot(uploadedQuery, (snapshot) => {
+        console.log('Designer uploaded proofs received:', snapshot.docs.length);
+        const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+        setUploadedProofs(data);
+      });
+      unsubscribers.push(unsubUploaded);
+
+      // Query assigned proofs (no orderBy)  
+      const assignedQuery = query(collection(db, 'proofs'), where('assignedTo', 'array-contains', userProfile.uid));
+      const unsubAssigned = onSnapshot(assignedQuery, (snapshot) => {
+        console.log('Designer assigned proofs received:', snapshot.docs.length);
+        const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+        setAssignedProofs(data);
+      });
+      unsubscribers.push(unsubAssigned);
+
+      return () => unsubscribers.forEach(unsub => unsub());
+    }
   }, [currentUser, userProfile, isAdmin, isClient, isDesigner]);
+
+// Add this second useEffect to combine designer proofs
+useEffect(() => {
+  if (!isDesigner()) return;
+
+  console.log('Combining designer proofs:', { uploaded: uploadedProofs.length, assigned: assignedProofs.length });
+
+  // Combine and deduplicate
+  const combined = [...uploadedProofs];
+  assignedProofs.forEach(proof => {
+    if (!combined.find(p => p.id === proof.id)) {
+      combined.push(proof);
+    }
+  });
+
+  // Sort by date
+  combined.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+
+  console.log('Final combined proofs:', combined.length);
+  setProofs(combined);
+  
+  const newStats = combined.reduce((acc, proof) => {
+    acc.total++;
+    acc[proof.status] = (acc[proof.status] || 0) + 1;
+    return acc;
+  }, { pending: 0, approved: 0, declined: 0, total: 0 });
+  setStats(newStats);
+}, [uploadedProofs, assignedProofs, isDesigner]);
+
+  // Also add this useEffect to combine designer proofs
+  useEffect(() => {
+    if (!isDesigner()) return;
+
+    console.log('Dashboard: Combining designer proofs', {
+      uploaded: uploadedProofs.length,
+      assigned: assignedProofs.length
+    });
+
+    const combined = [...uploadedProofs];
+    
+    assignedProofs.forEach(assignedProof => {
+      if (!combined.find(proof => proof.id === assignedProof.id)) {
+        combined.push(assignedProof);
+      }
+    });
+
+    combined.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || new Date(0);
+      return bTime - aTime;
+    });
+
+    console.log('Dashboard: Final combined proofs', combined.length);
+    setProofs(combined);
+    
+    const newStats = combined.reduce((acc, proof) => {
+      acc.total++;
+      acc[proof.status] = (acc[proof.status] || 0) + 1;
+      return acc;
+    }, { pending: 0, approved: 0, declined: 0, total: 0 });
+    
+    console.log('Dashboard: Final stats', newStats);
+    setStats(newStats);
+  }, [uploadedProofs, assignedProofs, isDesigner]);
 
   // Filter proofs based on status and search term
   const filteredProofs = proofs.filter(proof => {
