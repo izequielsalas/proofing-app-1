@@ -1,10 +1,10 @@
 import { Routes, Route } from 'react-router-dom';
-import Auth from './components/Auth';
-import Dashboard from './components/Dashboard';
-import ProofViewer from './components/ProofViewer';
-import ImageGallery from './components/ImageGallery';
-import ProtectedRoute from './components/ProtectedRoute';
-import CreateProfile from './components/createProfile';
+import Auth from './components/auth';                    // ✅ Fixed: lowercase
+import Dashboard from './components/dashboard';          // ✅ Fixed: lowercase
+import ProofViewer from './components/proofViewer';      // ✅ Fixed: camelCase
+import ImageGallery from './components/imageGallery';    // ✅ Fixed: camelCase
+import ProtectedRoute from './components/protectedRoute'; // ✅ Fixed: camelCase
+import CreateProfile from './components/createProfile';   // ✅ Fixed: camelCase
 
 function App() {
   return (

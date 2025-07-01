@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+// src/components/UploadProof.jsx
+import { useRef, useState, useEffect } from 'react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { storage, db, auth } from '../firebase';
-import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Upload, File, X, CheckCircle, AlertCircle, User } from 'lucide-react';
 
 export default function UploadProof({ onUploadComplete }) {
   const [files, setFiles] = useState([]);
@@ -10,8 +12,35 @@ export default function UploadProof({ onUploadComplete }) {
   const [uploadProgress, setUploadProgress] = useState({});
   const [projectTitle, setProjectTitle] = useState('');
   const [clientName, setClientName] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [notes, setNotes] = useState('');
+  const [clients, setClients] = useState([]);
   const fileInputRef = useRef();
+  const { userProfile, isAdmin, isDesigner } = useAuth();
+
+  // Fetch clients for assignment
+  useEffect(() => {
+    const fetchClients = async () => {
+      if (!isAdmin() && !isDesigner()) return;
+      
+      try {
+        const q = query(
+          collection(db, 'users'),
+          where('role', '==', 'client')
+        );
+        const querySnapshot = await getDocs(q);
+        const clientsList = [];
+        querySnapshot.forEach((doc) => {
+          clientsList.push({ id: doc.id, ...doc.data() });
+        });
+        setClients(clientsList);
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+      }
+    };
+
+    fetchClients();
+  }, [isAdmin, isDesigner]);
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -44,6 +73,11 @@ export default function UploadProof({ onUploadComplete }) {
   const uploadFiles = async () => {
     if (files.length === 0) return alert('Please select at least one file');
     if (!projectTitle.trim()) return alert('Please enter a project title');
+    
+    // Validation for client assignment
+    if ((isAdmin() || isDesigner()) && !selectedClientId && !clientName.trim()) {
+      return alert('Please select a client or enter a client name');
+    }
 
     setUploading(true);
     const user = auth.currentUser;
@@ -65,17 +99,36 @@ export default function UploadProof({ onUploadComplete }) {
         await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(fileRef);
 
+        // Determine client assignment
+        let finalClientId = selectedClientId;
+        let finalClientName = clientName.trim();
+        
+        if (selectedClientId) {
+          const selectedClient = clients.find(c => c.id === selectedClientId);
+          finalClientName = selectedClient?.displayName || selectedClient?.name || selectedClient?.email || finalClientName;
+        } else if (!finalClientId && (isAdmin() || isDesigner())) {
+          // If no client selected but client name provided, use the client name
+          finalClientId = 'unassigned';
+        } else if (!isAdmin() && !isDesigner()) {
+          // For clients uploading their own proofs (shouldn't happen with current permissions, but safety check)
+          finalClientId = userProfile?.clientId || userProfile?.uid;
+          finalClientName = userProfile?.displayName || userProfile?.name || user?.email;
+        }
+
         // Add to Firestore
         await addDoc(collection(db, 'proofs'), {
           title: projectTitle.trim(),
-          clientName: clientName.trim(),
+          clientName: finalClientName,
+          clientId: finalClientId,
           fileUrl: downloadURL,
           fileName: file.name,
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
           notes: notes.trim(),
-          uploadedBy: user?.email || 'unknown',
+          uploadedBy: user?.uid,
+          uploaderEmail: user?.email || 'unknown',
+          assignedTo: selectedClientId ? [selectedClientId] : [],
           createdAt: serverTimestamp(),
         });
 
@@ -89,6 +142,7 @@ export default function UploadProof({ onUploadComplete }) {
       setFiles([]);
       setProjectTitle('');
       setClientName('');
+      setSelectedClientId('');
       setNotes('');
       setUploadProgress({});
       fileInputRef.current.value = '';
@@ -121,6 +175,14 @@ export default function UploadProof({ onUploadComplete }) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const handleClientSelection = (clientId) => {
+    setSelectedClientId(clientId);
+    if (clientId) {
+      const selectedClient = clients.find(c => c.id === clientId);
+      setClientName(selectedClient?.displayName || selectedClient?.name || selectedClient?.email || '');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -139,9 +201,35 @@ export default function UploadProof({ onUploadComplete }) {
           />
         </div>
 
+        {/* Client Assignment - Only for admins and designers */}
+        {(isAdmin() || isDesigner()) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Assign to Client *
+            </label>
+            <select
+              value={selectedClientId}
+              onChange={(e) => handleClientSelection(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={uploading}
+            >
+              <option value="">Select a client...</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.displayName || client.name || client.email}
+                </option>
+              ))}
+              <option value="custom">Enter custom client name...</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Custom Client Name - Show when "custom" is selected or for fallback */}
+      {((isAdmin() || isDesigner()) && (selectedClientId === 'custom' || selectedClientId === '')) && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Client Name
+            Client Name {selectedClientId === 'custom' ? '*' : '(or select from list above)'}
           </label>
           <input
             type="text"
@@ -152,7 +240,7 @@ export default function UploadProof({ onUploadComplete }) {
             disabled={uploading}
           />
         </div>
-      </div>
+      )}
 
       {/* Notes */}
       <div>
@@ -252,7 +340,9 @@ export default function UploadProof({ onUploadComplete }) {
         <div className="flex justify-end">
           <button
             onClick={uploadFiles}
-            disabled={uploading || !projectTitle.trim()}
+            disabled={uploading || !projectTitle.trim() || 
+              ((isAdmin() || isDesigner()) && !selectedClientId && !clientName.trim())
+            }
             className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? 'Uploading...' : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`}

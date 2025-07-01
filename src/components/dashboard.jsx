@@ -1,13 +1,16 @@
+// src/components/Dashboard.jsx
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import UploadProof from './UploadProof';
+import { useAuth } from '../contexts/AuthContext';
+import UploadProof from './uploadProof';
 import ProofGrid from './ProofGrid';
-import { Upload, Filter, Search, LogOut } from 'lucide-react';
+import { Upload, Filter, Search, LogOut, Users, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
+  const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
   const [proofs, setProofs] = useState([]);
   const [showUpload, setShowUpload] = useState(false);
   const [filter, setFilter] = useState('all'); // all, pending, approved, declined
@@ -15,20 +18,48 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ pending: 0, approved: 0, declined: 0, total: 0 });
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, setUser);
-    return unsubAuth;
-  }, []);
+    if (!currentUser || !userProfile) return;
 
-  useEffect(() => {
-    if (!user) return;
+    let q;
+    
+    if (isAdmin()) {
+      // Admins see all proofs
+      q = query(
+        collection(db, 'proofs'),
+        orderBy('createdAt', 'desc')
+      );
+    } else if (isClient()) {
+      // Clients only see their own proofs
+      q = query(
+        collection(db, 'proofs'),
+        where('clientId', '==', userProfile.clientId || userProfile.uid),
+        orderBy('createdAt', 'desc')
+      );
+    } else if (isDesigner()) {
+      // Designers see proofs assigned to them or uploaded by them
+      q = query(
+        collection(db, 'proofs'),
+        orderBy('createdAt', 'desc')
+      );
+    }
 
-    const q = query(collection(db, 'proofs'), orderBy('createdAt', 'desc'));
+    if (!q) return;
+
     const unsub = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
-      setProofs(data);
+      
+      // Additional filtering for designers to only see their assigned proofs
+      const filteredData = isDesigner() 
+        ? data.filter(proof => 
+            proof.assignedTo?.includes(userProfile.uid) || 
+            proof.uploadedBy === userProfile.uid
+          )
+        : data;
+      
+      setProofs(filteredData);
       
       // Calculate stats
-      const newStats = data.reduce((acc, proof) => {
+      const newStats = filteredData.reduce((acc, proof) => {
         acc.total++;
         acc[proof.status] = (acc[proof.status] || 0) + 1;
         return acc;
@@ -37,14 +68,15 @@ export default function Dashboard() {
     });
     
     return unsub;
-  }, [user]);
+  }, [currentUser, userProfile, isAdmin, isClient, isDesigner]);
 
   // Filter proofs based on status and search term
   const filteredProofs = proofs.filter(proof => {
     const matchesFilter = filter === 'all' || proof.status === filter;
     const matchesSearch = searchTerm === '' || 
       proof.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (proof.title && proof.title.toLowerCase().includes(searchTerm.toLowerCase()));
+      (proof.title && proof.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (proof.clientName && proof.clientName.toLowerCase().includes(searchTerm.toLowerCase()));
     
     return matchesFilter && matchesSearch;
   });
@@ -57,7 +89,16 @@ export default function Dashboard() {
     }
   };
 
-  if (!user) {
+  const getRoleDisplayName = () => {
+    switch (userProfile?.role) {
+      case 'admin': return 'Administrator';
+      case 'designer': return 'Designer';
+      case 'client': return 'Client';
+      default: return 'User';
+    }
+  };
+
+  if (!currentUser || !userProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -76,10 +117,31 @@ export default function Dashboard() {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Cesar Graphics</h1>
-              <p className="text-sm text-gray-600">Proofing Dashboard</p>
+              <p className="text-sm text-gray-600">
+                {getRoleDisplayName()} Dashboard
+              </p>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600">Welcome, {user.email}</span>
+              {/* Admin Navigation */}
+              {isAdmin() && (
+                <Link
+                  to="/admin/users"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  <Users size={16} />
+                  Manage Users
+                </Link>
+              )}
+              
+              <div className="text-right">
+                <div className="text-sm font-medium text-gray-900">
+                  {userProfile.displayName || userProfile.name || currentUser.email}
+                </div>
+                <div className="text-xs text-gray-500 capitalize">
+                  {userProfile.role}
+                </div>
+              </div>
+              
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
@@ -101,7 +163,9 @@ export default function Dashboard() {
                 <div className="w-4 h-4 bg-blue-600 rounded"></div>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Proofs</p>
+                <p className="text-sm font-medium text-gray-600">
+                  {isAdmin() ? 'Total Proofs' : 'Your Proofs'}
+                </p>
                 <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
               </div>
             </div>
@@ -176,23 +240,43 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Upload Button */}
-            <button
-              onClick={() => setShowUpload(!showUpload)}
-              className="flex items-center gap-2 px-4 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors"
-            >
-              <Upload size={16} />
-              Upload Proof
-            </button>
+            {/* Upload Button - Only for admins and designers */}
+            {hasPermission('canUploadProofs') && (
+              <button
+                onClick={() => setShowUpload(!showUpload)}
+                className="flex items-center gap-2 px-4 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors"
+              >
+                <Upload size={16} />
+                Upload Proof
+              </button>
+            )}
           </div>
 
           {/* Upload Component */}
-          {showUpload && (
+          {showUpload && hasPermission('canUploadProofs') && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <UploadProof onUploadComplete={() => setShowUpload(false)} />
             </div>
           )}
         </div>
+
+        {/* Role-specific messages */}
+        {isClient() && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <p className="text-blue-800 text-sm">
+              <strong>Client View:</strong> You can only see proofs assigned to you. 
+              Click on any proof to approve, decline, or add comments.
+            </p>
+          </div>
+        )}
+
+        {isDesigner() && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+            <p className="text-purple-800 text-sm">
+              <strong>Designer View:</strong> You can see proofs assigned to you and upload new proofs for client approval.
+            </p>
+          </div>
+        )}
 
         {/* Results Count */}
         <div className="mb-4">
