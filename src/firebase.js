@@ -6,15 +6,7 @@ import { getStorage } from "firebase/storage";
 import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
 
 // Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyCufeuyxlhqRCyuxqGqA_V9smEy9lIwSCI",
-  authDomain: "proofingapp1.firebaseapp.com",
-  projectId: "proofingapp1",
-  storageBucket: "proofingapp1.firebasestorage.app",
-  messagingSenderId: "242269508692",
-  appId: "1:242269508692:web:33da52e1b18d235a5009c1",
-  measurementId: "G-915HDLWE8N"
-};
+const firebaseConfig = {*};
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
