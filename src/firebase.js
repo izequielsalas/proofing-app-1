@@ -7,9 +7,8 @@ import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersist
 
 
 // Your web app's Firebase configuration
-<<<<<<< HEAD
 const firebaseConfig = {
- apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "proofingapp1.firebaseapp.com",
   projectId: "proofingapp1",
   storageBucket: "proofingapp1.firebasestorage.app",
@@ -17,8 +16,6 @@ const firebaseConfig = {
   appId: "1:242269508692:web:33da52e1b18d235a5009c1",
   measurementId: "G-915HDLWE8N"
 };
-=======
-const firebaseConfig = {*};
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
