@@ -1,9 +1,10 @@
 // src/components/UserManagement.jsx
 import React, { useState, useEffect } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, Shield, Edit2, Save, X, UserCheck, UserX } from 'lucide-react';
+import { Users, Shield, Edit2, Save, X, UserCheck, UserX, ArrowLeft } from 'lucide-react';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -141,10 +142,22 @@ export default function UserManagement() {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Users className="w-6 h-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Users className="w-6 h-6 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          </div>
+          
+          {/* Back to Dashboard Button */}
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 px-4 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors"
+          >
+            <ArrowLeft size={16} />
+            Back to Dashboard
+          </Link>
         </div>
+        
         <p className="text-gray-600">
           Manage user roles and permissions for the proofing system.
         </p>
@@ -325,10 +338,10 @@ export default function UserManagement() {
             <h4 className="font-medium text-blue-800 mb-2">Designer</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               <li>• Upload proofs</li>
+              <li>• <strong>Assign proofs to clients</strong></li>
               <li>• View assigned proofs</li>
               <li>• Edit own uploads</li>
               <li>• No approval rights</li>
-              <li>• Limited access</li>
             </ul>
           </div>
           <div className="border border-green-200 rounded-lg p-4">

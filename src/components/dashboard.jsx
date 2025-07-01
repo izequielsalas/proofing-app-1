@@ -1,55 +1,58 @@
-// src/components/Dashboard.jsx
-import { useEffect, useState } from 'react';
+// src/components/dashboard.jsx
+import React, { useState, useEffect } from 'react';
+import { collection, query, onSnapshot, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
-import { auth, db } from '../firebase';
-import { useAuth } from '../contexts/AuthContext';
-import UploadProof from './uploadProof';
-import ProofGrid from './ProofGrid';
-import { Upload, Filter, Search, LogOut, Users, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { db, auth } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
+import ProofGrid from './proofGrid';
+import UploadProof from './uploadProof';
+import { Search, Filter, Upload, Users, LogOut } from 'lucide-react';
 
 export default function Dashboard() {
-  const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
   const [proofs, setProofs] = useState([]);
-  const [showUpload, setShowUpload] = useState(false);
-  const [filter, setFilter] = useState('all'); // all, pending, approved, declined
+  const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showUpload, setShowUpload] = useState(false);
   const [stats, setStats] = useState({ pending: 0, approved: 0, declined: 0, total: 0 });
+  
+  const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
 
   useEffect(() => {
     if (!currentUser || !userProfile) return;
 
+    // Build query based on user role
     let q;
-    
     if (isAdmin()) {
       // Admins see all proofs
-      q = query(
-        collection(db, 'proofs'),
-        orderBy('createdAt', 'desc')
-      );
+      q = query(collection(db, 'proofs'));
     } else if (isClient()) {
-      // Clients only see their own proofs
+      // Clients see only proofs assigned to them
       q = query(
         collection(db, 'proofs'),
-        where('clientId', '==', userProfile.clientId || userProfile.uid),
-        orderBy('createdAt', 'desc')
+        where('assignedTo', 'array-contains', userProfile.uid)
       );
     } else if (isDesigner()) {
       // Designers see proofs assigned to them or uploaded by them
-      q = query(
-        collection(db, 'proofs'),
-        orderBy('createdAt', 'desc')
-      );
+      q = query(collection(db, 'proofs'));
+    } else {
+      // Default fallback
+      q = query(collection(db, 'proofs'));
     }
 
-    if (!q) return;
-
     const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
       
-      // Additional filtering for designers to only see their assigned proofs
-      const filteredData = isDesigner() 
+      // Additional filtering for designers and clients
+      const filteredData = isClient() 
+        ? data.filter(proof => 
+            proof.assignedTo?.includes(userProfile.uid) || 
+            proof.clientId === userProfile.uid
+          )
+        : isDesigner()
         ? data.filter(proof => 
             proof.assignedTo?.includes(userProfile.uid) || 
             proof.uploadedBy === userProfile.uid
@@ -240,10 +243,10 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Upload Button - Only for admins and designers */}
-            {hasPermission('canUploadProofs') && (
+            {/* Upload Button - Only for admins and designers, hidden when dropdown is open */}
+            {hasPermission('canUploadProofs') && !showUpload && (
               <button
-                onClick={() => setShowUpload(!showUpload)}
+                onClick={() => setShowUpload(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors"
               >
                 <Upload size={16} />
@@ -264,7 +267,7 @@ export default function Dashboard() {
         {isClient() && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <p className="text-blue-800 text-sm">
-              <strong>Client View:</strong> You can only see proofs assigned to you. 
+              <strong>Client View:</strong> You can only see proofs assigned to you.
               Click on any proof to approve, decline, or add comments.
             </p>
           </div>

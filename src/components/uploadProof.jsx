@@ -1,51 +1,56 @@
-// src/components/UploadProof.jsx
-import { useRef, useState, useEffect } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// src/components/uploadProof.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { storage, db, auth } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Upload, File, X, CheckCircle, AlertCircle, User } from 'lucide-react';
+import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function UploadProof({ onUploadComplete }) {
   const [files, setFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({});
   const [projectTitle, setProjectTitle] = useState('');
   const [clientName, setClientName] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [notes, setNotes] = useState('');
   const [clients, setClients] = useState([]);
+  const [notes, setNotes] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({});
   const fileInputRef = useRef();
-  const { userProfile, isAdmin, isDesigner } = useAuth();
+  
+  const { userProfile, isAdmin, isDesigner, canAssignProofs } = useAuth();
 
-  // Fetch clients for assignment
+  // Fetch client list for admins and designers
   useEffect(() => {
-    const fetchClients = async () => {
-      if (!isAdmin() && !isDesigner()) return;
-      
-      try {
-        const q = query(
-          collection(db, 'users'),
-          where('role', '==', 'client')
-        );
-        const querySnapshot = await getDocs(q);
-        const clientsList = [];
-        querySnapshot.forEach((doc) => {
-          clientsList.push({ id: doc.id, ...doc.data() });
-        });
-        setClients(clientsList);
-      } catch (error) {
-        console.error('Error fetching clients:', error);
-      }
-    };
+    if (canAssignProofs()) {
+      const fetchClients = async () => {
+        try {
+          const q = query(collection(db, 'users'), where('role', '==', 'client'));
+          const querySnapshot = await getDocs(q);
+          const clientsList = [];
+          querySnapshot.forEach((doc) => {
+            clientsList.push({ id: doc.id, ...doc.data() });
+          });
+          setClients(clientsList);
+        } catch (error) {
+          console.error('Error fetching clients:', error);
+        }
+      };
+      fetchClients();
+    }
+  }, [canAssignProofs]);
 
-    fetchClients();
-  }, [isAdmin, isDesigner]);
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
     
-    // Validate file types
+    // Check file types (PDF or images only)
     const validFiles = selectedFiles.filter(file => {
       const isValid = file.type === 'application/pdf' || file.type.startsWith('image/');
       if (!isValid) {
@@ -74,8 +79,8 @@ export default function UploadProof({ onUploadComplete }) {
     if (files.length === 0) return alert('Please select at least one file');
     if (!projectTitle.trim()) return alert('Please enter a project title');
     
-    // Validation for client assignment
-    if ((isAdmin() || isDesigner()) && !selectedClientId && !clientName.trim()) {
+    // Validation for client assignment - both admins and designers need to assign
+    if (canAssignProofs() && !selectedClientId && !clientName.trim()) {
       return alert('Please select a client or enter a client name');
     }
 
@@ -106,10 +111,10 @@ export default function UploadProof({ onUploadComplete }) {
         if (selectedClientId) {
           const selectedClient = clients.find(c => c.id === selectedClientId);
           finalClientName = selectedClient?.displayName || selectedClient?.name || selectedClient?.email || finalClientName;
-        } else if (!finalClientId && (isAdmin() || isDesigner())) {
+        } else if (!finalClientId && canAssignProofs()) {
           // If no client selected but client name provided, use the client name
           finalClientId = 'unassigned';
-        } else if (!isAdmin() && !isDesigner()) {
+        } else if (!canAssignProofs()) {
           // For clients uploading their own proofs (shouldn't happen with current permissions, but safety check)
           finalClientId = userProfile?.clientId || userProfile?.uid;
           finalClientName = userProfile?.displayName || userProfile?.name || user?.email;
@@ -153,83 +158,81 @@ export default function UploadProof({ onUploadComplete }) {
     } catch (error) {
       console.error('Upload error:', error);
       alert('Upload failed. Please try again.');
-      setUploadProgress(prev => {
-        const updated = { ...prev };
-        Object.keys(updated).forEach(key => {
-          if (updated[key].status === 'uploading') {
-            updated[key] = { status: 'error', progress: 0 };
-          }
-        });
-        return updated;
+      
+      // Mark failed uploads
+      files.forEach((_, i) => {
+        if (!uploadProgress[i] || uploadProgress[i].status === 'uploading') {
+          setUploadProgress(prev => ({
+            ...prev,
+            [i]: { status: 'error', progress: 0 }
+          }));
+        }
       });
     } finally {
       setUploading(false);
     }
   };
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const handleClientSelection = (clientId) => {
-    setSelectedClientId(clientId);
-    if (clientId) {
-      const selectedClient = clients.find(c => c.id === clientId);
-      setClientName(selectedClient?.displayName || selectedClient?.name || selectedClient?.email || '');
-    }
-  };
-
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Project Info */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Project Title *
-          </label>
-          <input
-            type="text"
-            value={projectTitle}
-            onChange={(e) => setProjectTitle(e.target.value)}
-            placeholder="e.g., Business Cards - John Smith"
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            disabled={uploading}
-          />
-        </div>
-
-        {/* Client Assignment - Only for admins and designers */}
-        {(isAdmin() || isDesigner()) && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Assign to Client *
-            </label>
-            <select
-              value={selectedClientId}
-              onChange={(e) => handleClientSelection(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={uploading}
-            >
-              <option value="">Select a client...</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.displayName || client.name || client.email}
-                </option>
-              ))}
-              <option value="custom">Enter custom client name...</option>
-            </select>
-          </div>
-        )}
+      <div className="border-b border-gray-200 pb-4">
+        <h3 className="text-lg font-medium text-gray-900">Upload New Proof</h3>
+        <p className="text-sm text-gray-600 mt-1">
+          Upload files for client review and approval
+        </p>
       </div>
 
-      {/* Custom Client Name - Show when "custom" is selected or for fallback */}
-      {((isAdmin() || isDesigner()) && (selectedClientId === 'custom' || selectedClientId === '')) && (
+      {/* Project Title */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Project Title *
+        </label>
+        <input
+          type="text"
+          value={projectTitle}
+          onChange={(e) => setProjectTitle(e.target.value)}
+          placeholder="Enter project or job title"
+          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          disabled={uploading}
+        />
+      </div>
+
+      {/* Client Assignment - Only for admins and designers */}
+      {canAssignProofs() && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Client Name {selectedClientId === 'custom' ? '*' : '(or select from list above)'}
+            Assign to Client *
+          </label>
+          
+          {/* Client Selection Dropdown */}
+          {clients.length > 0 && (
+            <div className="mb-3">
+              <select
+                value={selectedClientId}
+                onChange={(e) => {
+                  setSelectedClientId(e.target.value);
+                  if (e.target.value) {
+                    setClientName(''); // Clear manual entry when selecting from dropdown
+                  }
+                }}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={uploading}
+              >
+                <option value="">Select existing client...</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.displayName || client.name || client.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          
+          {/* Manual Client Name Entry */}
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            {clients.length > 0 && !selectedClientId 
+              ? 'Or enter new client name:' 
+              : '(or select from list above)'}
           </label>
           <input
             type="text"
@@ -341,7 +344,7 @@ export default function UploadProof({ onUploadComplete }) {
           <button
             onClick={uploadFiles}
             disabled={uploading || !projectTitle.trim() || 
-              ((isAdmin() || isDesigner()) && !selectedClientId && !clientName.trim())
+              (canAssignProofs() && !selectedClientId && !clientName.trim())
             }
             className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
