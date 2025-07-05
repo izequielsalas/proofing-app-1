@@ -1,3 +1,4 @@
+// src/components/Modal.jsx - Complete fix for accept/decline functionality
 import { motion } from "framer-motion";
 import React, { useState } from "react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
@@ -12,13 +13,14 @@ export default function Modal({ project, onClose }) {
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // FIXED: Use correct field names that match Firestore rules
   const handleApprove = async () => {
     setIsLoading(true);
     try {
       await updateDoc(doc(db, "proofs", project.id), {
         status: "approved",
-        responseAt: serverTimestamp(),
-        notes: notes.trim(),
+        updatedAt: serverTimestamp(), // Changed from responseAt
+        comments: notes.trim(),       // Changed from notes
       });
       onClose();
     } catch (err) {
@@ -39,8 +41,8 @@ export default function Modal({ project, onClose }) {
     try {
       await updateDoc(doc(db, "proofs", project.id), {
         status: "declined",
-        responseAt: serverTimestamp(),
-        notes: notes.trim(),
+        updatedAt: serverTimestamp(), // Changed from responseAt
+        comments: notes.trim(),       // Changed from notes
       });
       onClose();
     } catch (err) {
@@ -132,19 +134,20 @@ export default function Modal({ project, onClose }) {
                   <p className="text-gray-900">{project.clientName}</p>
                 </div>
               )}
-              {project.responseAt && (
+              {/* FIXED: Check for both updatedAt (new) and responseAt (legacy) */}
+              {(project.updatedAt || project.responseAt) && (
                 <div>
                   <span className="font-medium text-gray-600">Response Date:</span>
                   <p className="text-gray-900">
-                    {project.responseAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}
+                    {(project.updatedAt?.toDate?.() || project.responseAt?.toDate?.())?.toLocaleDateString() || 'Unknown'}
                   </p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Comments Section */}
-          {(showCommentBox || project.notes) && (
+          {/* Comments Section - FIXED: Check for both comments (new) and notes (legacy) */}
+          {(showCommentBox || project.comments || project.notes) && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Comments {project.status === 'pending' && '(optional)'}
@@ -159,7 +162,9 @@ export default function Modal({ project, onClose }) {
                 />
               ) : (
                 <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                  <p className="text-gray-900">{project.notes || 'No comments provided'}</p>
+                  <p className="text-gray-900">
+                    {project.comments || project.notes || 'No comments provided'}
+                  </p>
                 </div>
               )}
             </div>
