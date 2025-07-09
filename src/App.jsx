@@ -26,6 +26,7 @@ function App() {
             {/* Public routes */}
             <Route path="/" element={<Auth />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/accept-invitation" element={<AcceptInvitation />} />
             
             {/* Protected routes */}
             <Route
