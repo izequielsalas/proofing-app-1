@@ -1,33 +1,43 @@
-// src/components/uploadProof.jsx
+// src/components/uploadProof.jsx - DEBUG VERSION
 import React, { useState, useRef, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { sendInvitationEmail, sendProofReadyEmail } from '../utils/emailService'; // ⭐ ADDED IMPORT
+import { sendInvitationEmail, sendProofReadyEmail } from '../utils/emailService';
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function UploadProof({ onUploadComplete }) {
   const [files, setFiles] = useState([]);
   const [projectTitle, setProjectTitle] = useState('');
   const [clientName, setClientName] = useState('');
-  const [clientEmail, setClientEmail] = useState(''); // ⭐ ADDED
+  const [clientEmail, setClientEmail] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
   const [clients, setClients] = useState([]);
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
-  const [showInviteForm, setShowInviteForm] = useState(false); // ⭐ ADDED
-  const [invitingClient, setInvitingClient] = useState(false); // ⭐ ADDED
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [invitingClient, setInvitingClient] = useState(false);
+  const [debugLog, setDebugLog] = useState([]); // Added debug logging
   const fileInputRef = useRef();
   
   const { userProfile, isAdmin, isDesigner, canAssignProofs } = useAuth();
+
+  // Helper function to add debug messages
+  const addDebugLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    console.log('🔍 UPLOAD DEBUG:', logEntry);
+    setDebugLog(prev => [...prev, { message: logEntry, type }]);
+  };
 
   // Fetch client list for admins and designers
   useEffect(() => {
     if (canAssignProofs()) {
       const fetchClients = async () => {
         try {
+          addDebugLog('Fetching client list...');
           const q = query(collection(db, 'users'), where('role', '==', 'client'));
           const querySnapshot = await getDocs(q);
           const clientsList = [];
@@ -35,15 +45,17 @@ export default function UploadProof({ onUploadComplete }) {
             clientsList.push({ id: doc.id, ...doc.data() });
           });
           setClients(clientsList);
+          addDebugLog(`Found ${clientsList.length} clients`);
         } catch (error) {
           console.error('Error fetching clients:', error);
+          addDebugLog(`Error fetching clients: ${error.message}`, 'error');
         }
       };
       fetchClients();
     }
   }, [canAssignProofs]);
 
-  // ⭐ NEW: Create and invite a new client
+  // Create and invite a new client
   const handleInviteClient = async () => {
     if (!clientEmail.trim() || !clientName.trim()) {
       alert('Please enter both client name and email');
@@ -65,6 +77,7 @@ export default function UploadProof({ onUploadComplete }) {
     }
 
     setInvitingClient(true);
+    addDebugLog(`Starting invitation process for ${clientEmail}`);
 
     try {
       // Create client record with invited status
@@ -78,10 +91,20 @@ export default function UploadProof({ onUploadComplete }) {
         inviterEmail: auth.currentUser?.email
       };
 
+      addDebugLog('Creating client record in Firestore...');
       const clientRef = await addDoc(collection(db, 'users'), clientData);
+      addDebugLog(`✅ Client record created with ID: ${clientRef.id}`);
       
       // Send invitation email
-      await sendInvitationEmail(clientEmail, clientName, auth.currentUser?.email);
+      addDebugLog('🔄 Sending invitation email...');
+      try {
+        const emailResult = await sendInvitationEmail(clientEmail, clientName, auth.currentUser?.email);
+        addDebugLog(`✅ Invitation email sent successfully! Result: ${JSON.stringify(emailResult)}`);
+      } catch (emailError) {
+        addDebugLog(`❌ Invitation email failed: ${emailError.message}`, 'error');
+        console.error('Invitation email error:', emailError);
+        // Continue anyway - don't fail the entire process
+      }
 
       // Update local state
       const newClient = { id: clientRef.id, ...clientData };
@@ -93,10 +116,12 @@ export default function UploadProof({ onUploadComplete }) {
       setClientName('');
       setShowInviteForm(false);
       
-      alert(`Invitation sent to ${clientName}!`);
+      addDebugLog(`🎉 Client invitation process complete for ${clientName}`);
+      alert(`Invitation process complete for ${clientName}!`);
 
     } catch (error) {
       console.error('Error inviting client:', error);
+      addDebugLog(`❌ Error in invitation process: ${error.message}`, 'error');
       alert('Failed to invite client. Please try again.');
     } finally {
       setInvitingClient(false);
@@ -149,13 +174,20 @@ export default function UploadProof({ onUploadComplete }) {
     }
 
     setUploading(true);
+    setDebugLog([]); // Clear previous logs
+    addDebugLog('🚀 Starting proof upload process...');
+    
     const user = auth.currentUser;
 
     try {
       const selectedClient = clients.find(c => c.id === selectedClientId);
+      addDebugLog(`Selected client: ${selectedClient?.displayName} (${selectedClient?.email})`);
+      addDebugLog(`Client status: ${selectedClient?.status}`);
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        addDebugLog(`📁 Uploading file ${i + 1}/${files.length}: ${file.name}`);
+        
         setUploadProgress(prev => ({
           ...prev,
           [i]: { status: 'uploading', progress: 0 }
@@ -168,14 +200,15 @@ export default function UploadProof({ onUploadComplete }) {
         
         await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(fileRef);
+        addDebugLog(`✅ File uploaded to storage: ${fileName}`);
 
         // Create proof document
-        await addDoc(collection(db, 'proofs'), {
+        const proofData = {
           title: projectTitle.trim(),
           clientName: selectedClient?.displayName || selectedClient?.email,
           clientId: selectedClientId,
           clientEmail: selectedClient?.email,
-          clientStatus: selectedClient?.status || 'active', // Track if client is invited
+          clientStatus: selectedClient?.status || 'active',
           fileUrl: downloadURL,
           fileName: file.name,
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
@@ -186,7 +219,11 @@ export default function UploadProof({ onUploadComplete }) {
           uploaderEmail: user?.email,
           createdAt: serverTimestamp(),
           assignedAt: new Date()
-        });
+        };
+
+        addDebugLog(`📝 Creating proof document in Firestore...`);
+        await addDoc(collection(db, 'proofs'), proofData);
+        addDebugLog(`✅ Proof document created successfully`);
 
         setUploadProgress(prev => ({
           ...prev,
@@ -194,15 +231,22 @@ export default function UploadProof({ onUploadComplete }) {
         }));
       }
 
-      // ⭐ NEW: If client is invited, send them a notification about the new proof
+      // Check if we need to send proof ready email for invited clients
       if (selectedClient?.status === 'invited') {
+        addDebugLog('🔄 Client is invited - sending proof ready notification...');
         try {
-          await sendProofReadyEmail(selectedClient.email, selectedClient.displayName, projectTitle);
-          console.log('Proof ready notification sent to invited client');
+          const notificationResult = await sendProofReadyEmail(
+            selectedClient.email, 
+            selectedClient.displayName, 
+            projectTitle
+          );
+          addDebugLog(`✅ Proof ready notification sent! Result: ${JSON.stringify(notificationResult)}`);
         } catch (emailError) {
-          console.error('Failed to send proof notification:', emailError);
-          // Don't fail the upload if email fails
+          addDebugLog(`❌ Proof ready notification failed: ${emailError.message}`, 'error');
+          console.error('Proof ready notification error:', emailError);
         }
+      } else {
+        addDebugLog('ℹ️ Client is active - automatic notification will be sent by Firebase Function');
       }
 
       // Reset form
@@ -213,11 +257,13 @@ export default function UploadProof({ onUploadComplete }) {
       setUploadProgress({});
       fileInputRef.current.value = '';
       
+      addDebugLog('🎉 Upload process completed successfully!');
       alert('Proofs uploaded successfully!');
       onUploadComplete?.();
       
     } catch (error) {
       console.error('Upload error:', error);
+      addDebugLog(`❌ Upload failed: ${error.message}`, 'error');
       alert('Upload failed. Please try again.');
       
       // Mark failed uploads
@@ -236,6 +282,23 @@ export default function UploadProof({ onUploadComplete }) {
 
   return (
     <div className="space-y-6">
+      {/* Debug Panel */}
+      {debugLog.length > 0 && (
+        <div className="bg-gray-100 border rounded-lg p-4">
+          <h3 className="font-bold text-gray-900 mb-2">🔍 Debug Log:</h3>
+          <div className="text-xs font-mono space-y-1 max-h-40 overflow-y-auto">
+            {debugLog.map((log, index) => (
+              <div 
+                key={index} 
+                className={`${log.type === 'error' ? 'text-red-700' : 'text-gray-700'}`}
+              >
+                {log.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="border-b border-gray-200 pb-4">
         <h3 className="text-lg font-medium text-gray-900">Upload New Proof</h3>
         <p className="text-sm text-gray-600 mt-1">
@@ -291,7 +354,7 @@ export default function UploadProof({ onUploadComplete }) {
             ))}
           </select>
 
-          {/* ⭐ NEW: Invite New Client Form */}
+          {/* Invite New Client Form */}
           {showInviteForm && (
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <h4 className="text-sm font-medium text-blue-900 mb-3">Invite New Client</h4>
