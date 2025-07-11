@@ -206,7 +206,78 @@ const getClientNotificationTemplate = (data) => {
 </html>`;
 };
 
-// NEW: Client Invitation Function
+// ⭐ NEW: Proof Ownership Transfer Function
+exports.transferProofOwnership = onCall(async (request) => {
+  // Verify the request is from an authenticated user
+  if (!request.auth) {
+    throw new Error('Must be authenticated to transfer proofs');
+  }
+
+  const { oldClientId, newUserUid } = request.data;
+  
+  if (!oldClientId || !newUserUid) {
+    throw new Error('Missing required parameters: oldClientId or newUserUid');
+  }
+
+  // Verify the user is transferring to their own UID
+  if (newUserUid !== request.auth.uid) {
+    throw new Error('Can only transfer proofs to your own account');
+  }
+
+  try {
+    console.log(`🔄 Transferring proofs from ${oldClientId} to ${newUserUid}`);
+    
+    // Find all proofs assigned to the old client ID
+    const proofsSnapshot = await db.collection('proofs')
+      .where('clientId', '==', oldClientId)
+      .get();
+    
+    console.log(`📋 Found ${proofsSnapshot.docs.length} proofs to transfer`);
+    
+    if (proofsSnapshot.empty) {
+      console.log('ℹ️ No proofs found to transfer');
+      return { 
+        success: true, 
+        message: 'No proofs found to transfer',
+        proofsTransferred: 0 
+      };
+    }
+
+    // Log details of proofs being transferred
+    proofsSnapshot.docs.forEach((doc, index) => {
+      const proof = doc.data();
+      console.log(`📄 Proof ${index + 1}: "${proof.title}" (ID: ${doc.id})`);
+    });
+
+    // Use batch to update all proofs
+    const batch = db.batch();
+    
+    proofsSnapshot.docs.forEach((doc) => {
+      const proofRef = db.collection('proofs').doc(doc.id);
+      batch.update(proofRef, {
+        clientId: newUserUid,
+        transferredAt: new Date(),
+        originalInvitationId: oldClientId
+      });
+    });
+
+    await batch.commit();
+    
+    console.log(`✅ Successfully transferred ${proofsSnapshot.docs.length} proofs to ${newUserUid}`);
+    
+    return { 
+      success: true, 
+      message: `Successfully transferred ${proofsSnapshot.docs.length} proofs`,
+      proofsTransferred: proofsSnapshot.docs.length 
+    };
+
+  } catch (error) {
+    console.error('❌ Error transferring proofs:', error);
+    throw new Error(`Failed to transfer proofs: ${error.message}`);
+  }
+});
+
+// Client Invitation Function
 exports.sendClientInvitation = onCall({
   secrets: [resendApiKey]
 }, async (request) => {
@@ -259,7 +330,7 @@ exports.sendClientInvitation = onCall({
   }
 });
 
-// NEW: Proof Ready Notification Function (for invited clients)
+// Proof Ready Notification Function (for invited clients)
 exports.sendProofNotification = onCall({
   secrets: [resendApiKey]
 }, async (request) => {
@@ -458,6 +529,7 @@ exports.healthCheck = onRequest(async (req, res) => {
     functions: [
       'sendClientInvitation',
       'sendProofNotification', 
+      'transferProofOwnership',  // Added to health check
       'handleNewProof',
       'handleProofStatusChange'
     ]
