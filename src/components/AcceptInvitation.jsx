@@ -1,10 +1,9 @@
-// 5. Accept Invitation Component
 // src/components/AcceptInvitation.jsx
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore'; // Added writeBatch
 import { auth, db } from '../firebase';
 
 export default function AcceptInvitation() {
@@ -51,6 +50,44 @@ export default function AcceptInvitation() {
     }
   };
 
+  // ⭐ NEW: Function to transfer proof ownership
+  const transferProofOwnership = async (oldClientId, newUserUid) => {
+    try {
+      console.log('Transferring proofs from', oldClientId, 'to', newUserUid);
+      
+      // Find all proofs assigned to the old invitation ID
+      const proofsQuery = query(
+        collection(db, 'proofs'),
+        where('clientId', '==', oldClientId)
+      );
+      const proofsSnapshot = await getDocs(proofsQuery);
+      
+      if (proofsSnapshot.empty) {
+        console.log('No proofs found to transfer');
+        return;
+      }
+
+      // Use batch to update all proofs at once
+      const batch = writeBatch(db);
+      
+      proofsSnapshot.docs.forEach((proofDoc) => {
+        const proofRef = doc(db, 'proofs', proofDoc.id);
+        batch.update(proofRef, {
+          clientId: newUserUid,
+          transferredAt: new Date(),
+          originalInvitationId: oldClientId
+        });
+      });
+
+      await batch.commit();
+      console.log(`Successfully transferred ${proofsSnapshot.docs.length} proofs to new user`);
+      
+    } catch (error) {
+      console.error('Error transferring proof ownership:', error);
+      // Don't fail the account creation if proof transfer fails
+    }
+  };
+
   const handleAcceptInvitation = async (e) => {
     e.preventDefault();
     
@@ -77,16 +114,20 @@ export default function AcceptInvitation() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      // ⭐ Transfer any existing proofs from invitation ID to new user UID
+      await transferProofOwnership(invitation.id, user.uid);
+
       // Update the invited user record with auth UID and activate account
       await updateDoc(doc(db, 'users', invitation.id), {
         uid: user.uid,
         displayName: displayName.trim(),
         status: 'active',
         activatedAt: new Date(),
-        emailVerified: user.emailVerified
+        emailVerified: user.emailVerified,
+        clientId: user.uid // ⭐ Ensure clientId matches the user's UID for future proofs
       });
 
-      console.log('Account activated successfully');
+      console.log('Account activated successfully and proofs transferred');
       
       // Redirect to dashboard
       navigate('/dashboard', { 
@@ -107,8 +148,12 @@ export default function AcceptInvitation() {
           await updateDoc(doc(db, 'users', invitation.id), {
             uid: auth.currentUser.uid,
             status: 'active',
-            activatedAt: new Date()
+            activatedAt: new Date(),
+            clientId: auth.currentUser.uid // ⭐ Set clientId
           });
+
+          // Transfer proofs if signing in with existing account
+          await transferProofOwnership(invitation.id, auth.currentUser.uid);
           
           navigate('/dashboard');
         } catch (signInError) {
