@@ -1,4 +1,5 @@
-// Updated AcceptInvitation.jsx - Full Component with Option B Implementation
+// src/components/AcceptInvitation.jsx - MINIMAL FIX VERSION
+// Only change: Handle existing accounts properly
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -88,7 +89,7 @@ export default function AcceptInvitation() {
     }
   };
 
-  // OPTION B: Enhanced invitation acceptance with standard user creation
+  // FIXED: Handle existing accounts properly
   const handleAcceptInvitation = async (e) => {
     e.preventDefault();
     
@@ -112,16 +113,37 @@ export default function AcceptInvitation() {
     setDebugLog([]);
 
     try {
-      addDebugLog('🚀 Starting Option B invitation acceptance...');
-      addDebugLog('Creating Firebase Auth account...');
+      addDebugLog('🚀 Starting invitation acceptance...');
       
-      // Create Firebase Auth account
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      let userCredential;
+      let user;
       
-      addDebugLog(`✅ Auth account created! UID: ${user.uid}`);
+      // Try to create account, handle existing account case
+      try {
+        addDebugLog('Creating Firebase Auth account...');
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        user = userCredential.user;
+        addDebugLog(`✅ Auth account created! UID: ${user.uid}`);
+      } catch (authError) {
+        if (authError.code === 'auth/email-already-in-use') {
+          addDebugLog('Account already exists, attempting to sign in...');
+          try {
+            userCredential = await signInWithEmailAndPassword(auth, email, password);
+            user = userCredential.user;
+            addDebugLog(`✅ Signed into existing account! UID: ${user.uid}`);
+          } catch (signInError) {
+            addDebugLog(`❌ Sign in failed: ${signInError.message}`);
+            if (signInError.code === 'auth/wrong-password') {
+              throw new Error('An account with this email already exists but the password is incorrect. Please contact support.');
+            }
+            throw signInError;
+          }
+        } else {
+          throw authError;
+        }
+      }
 
-      // Create NEW user document with UID as document ID (OPTION B - Standard Pattern)
+      // Create NEW user document with UID as document ID (Standard Pattern)
       addDebugLog('Creating user profile with standard UID-as-document-ID pattern...');
       const newUserData = {
         uid: user.uid,
@@ -178,7 +200,7 @@ export default function AcceptInvitation() {
         // Non-critical error, don't fail the process
       }
 
-      addDebugLog('🎉 Account activation complete with Option B!');
+      addDebugLog('🎉 Account activation complete!');
       
       // Redirect after showing debug info
       setTimeout(() => {
@@ -193,94 +215,15 @@ export default function AcceptInvitation() {
       console.error('Error accepting invitation:', error);
       addDebugLog(`❌ Error: ${error.message}`);
       
-      if (error.code === 'auth/email-already-in-use') {
-        addDebugLog('Email already exists. Handling existing account scenario...');
-        
-        try {
-          // Try to sign in with existing account
-          await signInWithEmailAndPassword(auth, email, password);
-          addDebugLog('✅ Signed in with existing account');
-          
-          // Check if user already has a profile with UID as document ID
-          const existingUserDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-          
-          if (existingUserDoc.exists()) {
-            addDebugLog('User already has a standard profile, checking for proof transfer...');
-            const existingData = existingUserDoc.data();
-            
-            // Only transfer if not already done for this invitation
-            if (existingData.originalInvitationId !== invitation.id) {
-              try {
-                const transferResult = await transferProofOwnership(invitation.id, auth.currentUser.uid);
-                addDebugLog(`✅ Additional proofs transferred: ${transferResult.proofsTransferred}`);
-                
-                // Update user record to include this invitation reference
-                await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-                  additionalInvitations: arrayUnion(invitation.id),
-                  updatedAt: new Date()
-                });
-                
-              } catch (transferError) {
-                addDebugLog(`⚠️ Proof transfer failed: ${transferError.message}`);
-              }
-            } else {
-              addDebugLog('Proofs already transferred for this invitation');
-            }
-          } else {
-            addDebugLog('Creating standard profile for existing auth account...');
-            // Create profile for existing auth user following standard pattern
-            const userData = {
-              uid: auth.currentUser.uid,
-              email: auth.currentUser.email,
-              displayName: displayName.trim(),
-              role: 'client',
-              status: 'active',
-              isActive: true,
-              clientId: auth.currentUser.uid,
-              originalInvitationId: invitation.id,
-              activatedAt: new Date(),
-              permissions: {
-                canViewAllProofs: false,
-                canUploadProofs: false,
-                canApproveProofs: true,
-                canManageUsers: false
-              },
-              createdAt: new Date(),
-              updatedAt: new Date()
-            };
-            
-            await setDoc(doc(db, 'users', auth.currentUser.uid), userData);
-            addDebugLog('✅ Standard profile created for existing account');
-            
-            // Transfer proofs
-            try {
-              await transferProofOwnership(invitation.id, auth.currentUser.uid);
-              addDebugLog('✅ Proofs transferred to existing account');
-            } catch (transferError) {
-              addDebugLog(`⚠️ Proof transfer failed: ${transferError.message}`);
-            }
-          }
-          
-          // Mark invitation as processed
-          try {
-            await updateDoc(doc(db, 'users', invitation.id), {
-              status: 'processed',
-              processedAt: new Date(),
-              processedByUid: auth.currentUser.uid,
-              note: 'Processed for existing account'
-            });
-          } catch (updateError) {
-            addDebugLog(`⚠️ Could not update invitation: ${updateError.message}`);
-          }
-          
-          navigate('/dashboard');
-          
-        } catch (signInError) {
-          console.error('Sign in error:', signInError);
-          setError('Account already exists but password is incorrect. Please contact support or try signing in normally.');
-        }
+      // More specific error handling
+      if (error.message.includes('password is incorrect')) {
+        setError(error.message);
+      } else if (error.code === 'auth/weak-password') {
+        setError('Password is too weak. Please choose a stronger password.');
+      } else if (error.code === 'auth/invalid-email') {
+        setError('Invalid email address format.');
       } else {
-        setError('Failed to create account. Please try again.');
+        setError('Failed to activate account. Please try again or contact support.');
       }
     } finally {
       setLoading(false);
@@ -322,7 +265,7 @@ export default function AcceptInvitation() {
               <p className="text-xs text-blue-800">
                 <strong>Debug Info:</strong><br/>
                 <strong>Invitation ID:</strong> {invitation.id}<br/>
-                <strong>Implementation:</strong> Option B (Standard UID Pattern)
+                <strong>Implementation:</strong> Standard UID Pattern
               </p>
             </div>
           )}
@@ -342,13 +285,11 @@ export default function AcceptInvitation() {
               </label>
               <input
                 id="displayName"
-                name="displayName"
                 type="text"
-                required
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Enter your full name"
+                required
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -358,27 +299,25 @@ export default function AcceptInvitation() {
               </label>
               <input
                 id="email"
-                name="email"
                 type="email"
                 value={email}
                 disabled
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-500 bg-gray-50 rounded-md sm:text-sm"
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-500"
               />
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Create Password
+                Password
               </label>
               <input
                 id="password"
-                name="password"
                 type="password"
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Choose a secure password"
+                required
+                minLength={6}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -388,39 +327,38 @@ export default function AcceptInvitation() {
               </label>
               <input
                 id="confirmPassword"
-                name="confirmPassword"
                 type="password"
-                required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm your password"
+                required
+                minLength={6}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading || !invitation}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Creating Account...' : 'Create Account & Access Portal'}
-            </button>
-          </div>
-
-          {/* Debug log in development */}
-          {process.env.NODE_ENV === 'development' && debugLog.length > 0 && (
-            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-left">
-              <p className="text-xs font-medium text-gray-700 mb-2">Debug Log:</p>
-              <div className="text-xs text-gray-600 max-h-32 overflow-y-auto">
-                {debugLog.map((log, index) => (
-                  <div key={index} className="mb-1">{log}</div>
-                ))}
-              </div>
-            </div>
-          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {loading ? 'Creating Account...' : 'Activate Account'}
+          </button>
         </form>
+
+        {/* Debug Log */}
+        {process.env.NODE_ENV === 'development' && debugLog.length > 0 && (
+          <div className="mt-6 p-4 bg-gray-100 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Debug Log:</h3>
+            <div className="text-xs space-y-1 max-h-40 overflow-y-auto">
+              {debugLog.map((log, index) => (
+                <div key={index} className="text-gray-600">
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

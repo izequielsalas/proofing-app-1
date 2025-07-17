@@ -1,17 +1,19 @@
 // src/components/UserManagement.jsx
 import React, { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, Shield, Edit2, Save, X, UserCheck, UserX, ArrowLeft } from 'lucide-react';
+import { Users, Shield, Edit2, Save, X, UserCheck, UserX, ArrowLeft, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
   const [tempRole, setTempRole] = useState('');
-  const { isAdmin } = useAuth();
+  const [deletingUser, setDeletingUser] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { isAdmin, userProfile } = useAuth();
 
   useEffect(() => {
     if (!isAdmin()) return;
@@ -80,6 +82,35 @@ export default function UserManagement() {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return;
+
+    try {
+      // Delete user document from Firestore
+      await deleteDoc(doc(db, 'users', deletingUser.id));
+      
+      // Close modal and reset state
+      setShowDeleteModal(false);
+      setDeletingUser(null);
+      
+      // Show success message
+      alert(`User ${deletingUser.displayName || deletingUser.email} has been successfully deleted.`);
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error deleting user. Please try again.');
+    }
+  };
+
+  const openDeleteModal = (user) => {
+    setDeletingUser(user);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeletingUser(null);
+  };
+
   const handleEditStart = (user) => {
     setEditingUser(user.id);
     setTempRole(user.role);
@@ -117,6 +148,17 @@ export default function UserManagement() {
     } catch {
       return 'Unknown';
     }
+  };
+
+  const canDeleteUser = (user) => {
+    // Prevent deleting yourself
+    if (user.id === userProfile?.uid) return false;
+    
+    // Prevent deleting the last admin
+    const adminCount = users.filter(u => u.role === 'admin').length;
+    if (user.role === 'admin' && adminCount <= 1) return false;
+    
+    return true;
   };
 
   if (!isAdmin()) {
@@ -217,16 +259,16 @@ export default function UserManagement() {
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10">
-                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <span className="text-blue-600 font-medium text-sm">
-                            {user.email?.charAt(0).toUpperCase()}
+                      <div className="flex-shrink-0 w-10 h-10">
+                        <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-700">
+                            {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
                           </span>
                         </div>
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
-                          {user.displayName || user.name || 'No name'}
+                          {user.displayName || 'No name set'}
                         </div>
                         <div className="text-sm text-gray-500">{user.email}</div>
                       </div>
@@ -234,17 +276,17 @@ export default function UserManagement() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {editingUser === user.id ? (
-                      <select
-                        value={tempRole}
+                      <select 
+                        value={tempRole} 
                         onChange={(e) => setTempRole(e.target.value)}
-                        className="text-sm border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="border border-gray-300 rounded px-2 py-1 text-sm"
                       >
-                        <option value="client">Client</option>
-                        <option value="designer">Designer</option>
                         <option value="admin">Admin</option>
+                        <option value="designer">Designer</option>
+                        <option value="client">Client</option>
                       </select>
                     ) : (
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full capitalize ${getRoleBadgeColor(user.role)}`}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(user.role)}`}>
                         {user.role}
                       </span>
                     )}
@@ -267,14 +309,14 @@ export default function UserManagement() {
                         <>
                           <button
                             onClick={() => handleEditSave(user.id)}
-                            className="btn-success btn-sm flex items-center gap-1"
+                            className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
                           >
                             <Save size={14} />
                             Save
                           </button>
                           <button
                             onClick={handleEditCancel}
-                            className="btn-ghost btn-sm flex items-center gap-1"
+                            className="flex items-center gap-1 px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded transition-colors"
                           >
                             <X size={14} />
                             Cancel
@@ -284,17 +326,17 @@ export default function UserManagement() {
                         <>
                           <button
                             onClick={() => handleEditStart(user)}
-                            className="btn-ghost btn-sm flex items-center gap-1"
+                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                           >
                             <Edit2 size={14} />
                             Edit
                           </button>
                           <button
                             onClick={() => toggleUserStatus(user.id, user.isActive)}
-                            className={`btn-sm flex items-center gap-1 ${
+                            className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
                               user.isActive 
-                                ? 'btn-danger' 
-                                : 'btn-success'
+                                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                                : 'bg-green-600 hover:bg-green-700 text-white'
                             }`}
                           >
                             {user.isActive ? (
@@ -309,6 +351,16 @@ export default function UserManagement() {
                               </>
                             )}
                           </button>
+                          {canDeleteUser(user) && (
+                            <button
+                              onClick={() => openDeleteModal(user)}
+                              className="flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
+                              title="Delete User"
+                            >
+                              <Trash2 size={14} />
+                              Delete
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -319,6 +371,47 @@ export default function UserManagement() {
           </table>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Delete User</h3>
+                <p className="text-sm text-gray-500">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700">
+                Are you sure you want to delete <strong>{deletingUser?.displayName || deletingUser?.email}</strong>?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                This will permanently remove the user from the system. Any proofs assigned to this user will need to be reassigned.
+              </p>
+            </div>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              >
+                Delete User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Role Descriptions */}
       <div className="bg-white rounded-lg shadow p-6">

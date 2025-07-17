@@ -1,11 +1,11 @@
 // src/contexts/AuthContext.jsx - FIXED VERSION
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc, query, where, collection, getDocs, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-const AuthContext = createContext({});
+const AuthContext = createContext();
 
 export function useAuth() {
   return useContext(AuthContext);
@@ -15,31 +15,12 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [firestoreError, setFirestoreError] = useState(false);
-  const [isPrivate, setIsPrivate] = useState(false);
-
-  // Check for private browsing mode
-  useEffect(() => {
-    const checkPrivateBrowsing = () => {
-      try {
-        localStorage.setItem('test', 'test');
-        localStorage.removeItem('test');
-        setIsPrivate(false);
-      } catch {
-        setIsPrivate(true);
-      }
-    };
-    
-    checkPrivateBrowsing();
-  }, []);
+  const [firestoreError, setFirestoreError] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      console.log('Auth state changed:', user?.email);
       setCurrentUser(user);
-      
       if (user) {
-        // ⭐ NEW: Enhanced profile lookup that handles invitations
         await findAndSetUserProfile(user);
       } else {
         setUserProfile(null);
@@ -50,91 +31,88 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // ⭐ NEW: Enhanced function to find user profile (handles invitations)
   const findAndSetUserProfile = async (user) => {
     try {
-      console.log('🔍 Looking for user profile:', user.email);
+      setLoading(true);
+      setFirestoreError(null);
       
-      // Strategy 1: Look for profile with user's UID (normal case)
+      console.log('Looking for user profile for:', user.email);
+      
+      // First, try to find user by UID (standard pattern)
       const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
+      const userDocSnap = await getDoc(userDocRef);
       
-      if (userDoc.exists()) {
-        console.log('✅ Found profile by UID');
-        setUserProfile(userDoc.data());
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        console.log('✅ Found user profile by UID');
+        setUserProfile(userData);
         setLoading(false);
         return;
       }
       
-      // Strategy 2: Look for invitation record by email (invitation case)
-      console.log('🔍 No profile by UID, checking for invitation...');
-      const invitationQuery = query(
+      console.log('No profile found by UID, searching by email...');
+      
+      // Search by email for any existing records
+      const emailQuery = query(
         collection(db, 'users'),
-        where('email', '==', user.email.toLowerCase()),
-        where('uid', '==', user.uid) // Must match the current user's UID
+        where('email', '==', user.email.toLowerCase())
       );
+      const emailSnapshot = await getDocs(emailQuery);
       
-      const invitationSnapshot = await getDocs(invitationQuery);
-      
-      if (!invitationSnapshot.empty) {
-        console.log('✅ Found existing profile by email+UID (likely from invitation)');
-        const profileData = { id: invitationSnapshot.docs[0].id, ...invitationSnapshot.docs[0].data() };
-        setUserProfile(profileData);
-        setLoading(false);
-        return;
-      }
-      
-      // Strategy 3: Look for old invitation that hasn't been linked yet
-      console.log('🔍 Checking for unlinked invitation...');
-      const oldInvitationQuery = query(
-        collection(db, 'users'),
-        where('email', '==', user.email.toLowerCase()),
-        where('status', 'in', ['invited', 'active'])
-      );
-      
-      const oldInvitationSnapshot = await getDocs(oldInvitationQuery);
-      
-      if (!oldInvitationSnapshot.empty) {
-        console.log('⚠️ Found unlinked invitation! This should have been handled by AcceptInvitation component.');
-        const inviteData = oldInvitationSnapshot.docs[0].data();
+      if (!emailSnapshot.empty) {
+        // Found existing profile(s) by email
+        console.log(`Found ${emailSnapshot.docs.length} profile(s) by email`);
         
-        // If it's an invitation without UID, something went wrong in the signup process
-        if (!inviteData.uid) {
-          console.log('🔧 Linking orphaned invitation to current user');
-          // We could fix this here, but it's better handled in AcceptInvitation
+        // Look for an active client profile first
+        const activeProfile = emailSnapshot.docs.find(doc => {
+          const data = doc.data();
+          return data.role === 'client' && data.status === 'active' && data.uid;
+        });
+        
+        if (activeProfile) {
+          console.log('✅ Found active client profile, using it');
+          setUserProfile(activeProfile.data());
+          setLoading(false);
+          return;
         }
         
-        setUserProfile(inviteData);
-        setLoading(false);
+        // Look for invitation records that need to be upgraded
+        const invitationProfile = emailSnapshot.docs.find(doc => {
+          const data = doc.data();
+          return data.status === 'invited' && !data.uid;
+        });
+        
+        if (invitationProfile) {
+          console.log('🔄 Found invitation profile, upgrading to full user...');
+          await upgradeInvitationToUser(user, invitationProfile);
+          return;
+        }
+      }
+      
+      // Check for pending invitations in invitations collection
+      const invitationsQuery = query(
+        collection(db, 'invitations'),
+        where('email', '==', user.email.toLowerCase()),
+        where('status', '==', 'pending')
+      );
+      const invitationsSnapshot = await getDocs(invitationsQuery);
+      
+      if (!invitationsSnapshot.empty) {
+        console.log('🔄 Found pending invitation, upgrading...');
+        const invitation = invitationsSnapshot.docs[0];
+        await upgradeInvitationToUser(user, invitation);
         return;
       }
       
-      // Strategy 4: No profile found anywhere - create new one (normal signup)
-      console.log('ℹ️ No existing profile found, creating new profile');
+      // No existing records found, create new user profile
+      console.log('No existing records found, creating new profile');
       await createUserProfile(user);
       
     } catch (error) {
       console.error('Error finding user profile:', error);
-      setFirestoreError(true);
-      // Fallback to creating a profile
-      await createUserProfile(user);
-    }
-  };
-
-  const fetchUserProfileOnce = async (userDocRef, user) => {
-    try {
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        console.log('User profile fetched once');
-        setUserProfile(userDoc.data());
-        setLoading(false);
-      } else {
-        // ⭐ UPDATED: Use the enhanced profile finder
-        await findAndSetUserProfile(user);
-      }
-    } catch (error) {
-      console.error('One-time fetch also failed:', error);
-      // Create fallback profile for private browsing
+      setFirestoreError(error.message);
+      
+      // Create fallback profile to prevent app from breaking
       const fallbackProfile = {
         uid: user.uid,
         email: user.email,
@@ -157,28 +135,112 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const createUserProfile = async (user) => {
-    console.log('Creating new user profile for:', user.email);
-    
-    // ⭐ CRITICAL: Check one more time if invitation exists before creating
+  const upgradeInvitationToUser = async (user, invitationDoc) => {
     try {
-      const lastCheckQuery = query(
-        collection(db, 'users'),
-        where('email', '==', user.email.toLowerCase())
+      const invitationData = invitationDoc.data();
+      console.log('Upgrading invitation to full user account...');
+      
+      // Create full user profile with UID as document ID
+      const userData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || invitationData.displayName || user.email,
+        role: 'client',
+        status: 'active',
+        isActive: true,
+        clientId: user.uid,
+        activatedAt: new Date(),
+        emailVerified: user.emailVerified,
+        permissions: {
+          canViewAllProofs: false,
+          canUploadProofs: false,
+          canApproveProofs: true,
+          canManageUsers: false
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // Preserve invitation metadata
+      if (invitationData.invitedBy) {
+        userData.invitedBy = invitationData.invitedBy;
+        userData.inviterEmail = invitationData.inviterEmail;
+        userData.invitedAt = invitationData.invitedAt;
+      }
+
+      // Create user document with UID as document ID
+      await setDoc(doc(db, 'users', user.uid), userData);
+      console.log('✅ User profile created');
+
+      // Transfer any proofs assigned to the invitation
+      await transferProofsFromInvitation(invitationDoc.id, user.uid);
+
+      // Mark invitation as completed
+      if (invitationData.type === 'client_invitation') {
+        // New invitation system
+        await updateDoc(doc(db, 'invitations', invitationDoc.id), {
+          status: 'completed',
+          completedAt: new Date(),
+          userUid: user.uid
+        });
+      } else {
+        // Legacy invitation in users collection
+        await updateDoc(doc(db, 'users', invitationDoc.id), {
+          status: 'processed',
+          processedAt: new Date(),
+          processedByUid: user.uid
+        });
+      }
+
+      setUserProfile(userData);
+      setLoading(false);
+      
+      console.log('🎉 Successfully upgraded invitation to user account');
+      
+    } catch (error) {
+      console.error('Error upgrading invitation:', error);
+      throw error;
+    }
+  };
+
+  const transferProofsFromInvitation = async (invitationId, userUid) => {
+    try {
+      console.log(`Transferring proofs from ${invitationId} to ${userUid}`);
+      
+      // Find proofs assigned to the invitation
+      const proofsQuery = query(
+        collection(db, 'proofs'),
+        where('clientId', '==', invitationId)
       );
+      const proofsSnapshot = await getDocs(proofsQuery);
       
-      const lastCheckSnapshot = await getDocs(lastCheckQuery);
-      
-      if (!lastCheckSnapshot.empty) {
-        console.log('⚠️ Found existing profile during create - using existing instead');
-        const existingProfile = lastCheckSnapshot.docs[0].data();
-        setUserProfile(existingProfile);
-        setLoading(false);
+      if (proofsSnapshot.empty) {
+        console.log('No proofs found to transfer');
         return;
       }
+
+      console.log(`Found ${proofsSnapshot.docs.length} proofs to transfer`);
+      
+      // Update each proof to point to the user's UID
+      const updatePromises = proofsSnapshot.docs.map(proofDoc => {
+        return updateDoc(doc(db, 'proofs', proofDoc.id), {
+          clientId: userUid,
+          transferredAt: new Date(),
+          originalInvitationId: invitationId
+        });
+      });
+      
+      await Promise.all(updatePromises);
+      console.log(`✅ Successfully transferred ${proofsSnapshot.docs.length} proofs`);
+      
     } catch (error) {
-      console.log('Final check failed, proceeding with creation:', error);
+      console.error('Error transferring proofs:', error);
+      // Don't throw - this shouldn't prevent account creation
     }
+  };
+
+  const createUserProfile = async (user) => {
+    console.log('Creating new user profile for:', user.email);
     
     // Create new profile (normal signup flow)
     const userRef = doc(db, 'users', user.uid);
@@ -186,11 +248,11 @@ export function AuthProvider({ children }) {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName || user.email,
-      role: 'client', // Default role
+      role: 'client',
       createdAt: new Date(),
       updatedAt: new Date(),
       isActive: true,
-      clientId: user.uid, // For clients, their clientId is their own uid
+      clientId: user.uid,
       permissions: {
         canViewAllProofs: false,
         canUploadProofs: false,
@@ -232,12 +294,11 @@ export function AuthProvider({ children }) {
     return false;
   };
 
-  // Enhanced permission for assigning proofs to clients
   const canAssignProofs = () => {
     return isAdmin() || isDesigner();
   };
 
-  // Refresh user profile (useful in private browsing)
+  // Refresh user profile (useful after invitation acceptance)
   const refreshUserProfile = async () => {
     if (currentUser) {
       setLoading(true);
@@ -255,7 +316,6 @@ export function AuthProvider({ children }) {
     canViewProof,
     canAssignProofs,
     loading,
-    isPrivateBrowsing: isPrivate,
     firestoreError,
     refreshUserProfile
   };
@@ -263,12 +323,6 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={value}>
       {!loading && children}
-      {/* Debug info for development */}
-      {process.env.NODE_ENV === 'development' && isPrivate && (
-        <div className="fixed bottom-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-800 px-3 py-2 rounded text-sm">
-          Private Browsing Mode Detected
-        </div>
-      )}
     </AuthContext.Provider>
   );
 }
