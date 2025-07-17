@@ -1,13 +1,18 @@
 const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
+const {getAuth} = require('firebase-admin/auth'); // Add this line
 const {defineSecret} = require('firebase-functions/params');
 const {Resend} = require('resend');
-const { onRequest, onCall } = require('firebase-functions/v2/https'); // Added onCall
+const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https'); // Add HttpsError
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin FIRST
 initializeApp();
+
+// THEN initialize the services
 const db = getFirestore();
+const auth = getAuth(); // Add this line AFTER initializeApp()
+
 
 // Define secrets for secure API key storage
 const resendApiKey = defineSecret('RESEND_API_KEY');
@@ -276,7 +281,146 @@ exports.transferProofOwnership = onCall(async (request) => {
     throw new Error(`Failed to transfer proofs: ${error.message}`);
   }
 });
+// ⭐ NEW: Complete User Deletion Function
+exports.deleteUserCompletely = onCall(async (request) => {
+  // Verify admin permissions
+  const { auth, data } = request;
+  
+  if (!auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
 
+  // Get admin user profile to verify permissions
+  const adminDoc = await db.collection('users').doc(auth.uid).get();
+  if (!adminDoc.exists || adminDoc.data().role !== 'admin') {
+    throw new HttpsError('permission-denied', 'Only admins can delete users');
+  }
+
+  const { userIdToDelete, transferProofsTo } = data;
+  
+  if (!userIdToDelete) {
+    throw new HttpsError('invalid-argument', 'userIdToDelete is required');
+  }
+
+  // Prevent admin from deleting themselves
+  if (userIdToDelete === auth.uid) {
+    throw new HttpsError('permission-denied', 'Cannot delete your own account');
+  }
+
+  try {
+    console.log(`🗑️ Starting complete deletion of user: ${userIdToDelete}`);
+    
+    // Step 1: Get user info before deletion
+    const userDoc = await db.collection('users').doc(userIdToDelete).get();
+    const userData = userDoc.data();
+    
+    if (!userData) {
+      throw new HttpsError('not-found', 'User document not found');
+    }
+
+    console.log(`📋 User to delete: ${userData.email} (${userData.role})`);
+
+    // Step 2: Handle proof ownership transfer
+    let proofsTransferred = 0;
+    if (transferProofsTo) {
+      console.log(`📦 Transferring proofs to: ${transferProofsTo}`);
+      
+      // Find proofs owned by this user
+      const clientProofsQuery = await db.collection('proofs')
+        .where('clientId', '==', userIdToDelete)
+        .get();
+      
+      // Find proofs assigned to this user
+      const assignedProofsQuery = await db.collection('proofs')
+        .where('assignedTo', 'array-contains', userIdToDelete)
+        .get();
+      
+      const batch = db.batch();
+      
+      // Transfer client-owned proofs
+      clientProofsQuery.docs.forEach(doc => {
+        batch.update(doc.ref, { 
+          clientId: transferProofsTo,
+          transferredFrom: userIdToDelete,
+          transferredAt: new Date(),
+          transferredBy: auth.uid,
+          transferReason: 'user_deletion'
+        });
+        proofsTransferred++;
+      });
+      
+      // Transfer assigned proofs (remove from assignedTo array and add new user)
+      assignedProofsQuery.docs.forEach(doc => {
+        const currentAssigned = doc.data().assignedTo || [];
+        const newAssigned = currentAssigned
+          .filter(id => id !== userIdToDelete)
+          .concat(transferProofsTo);
+        
+        batch.update(doc.ref, { 
+          assignedTo: newAssigned,
+          transferredFrom: userIdToDelete,
+          transferredAt: new Date(),
+          transferredBy: auth.uid,
+          transferReason: 'user_deletion'
+        });
+        proofsTransferred++;
+      });
+      
+      if (proofsTransferred > 0) {
+        await batch.commit();
+        console.log(`✅ Transferred ${proofsTransferred} proofs to ${transferProofsTo}`);
+      }
+    }
+
+    // Step 3: Create audit log before deletion
+    await db.collection('admin_actions').add({
+      action: 'user_deleted',
+      performedBy: auth.uid,
+      performedByEmail: adminDoc.data().email,
+      targetUserId: userIdToDelete,
+      targetUserEmail: userData.email,
+      targetUserRole: userData.role,
+      proofsTransferred: proofsTransferred,
+      transferredTo: transferProofsTo || null,
+      timestamp: new Date(),
+      details: {
+        displayName: userData.displayName,
+        createdAt: userData.createdAt,
+        lastLogin: userData.lastLogin,
+        isActive: userData.isActive
+      }
+    });
+
+    console.log('📝 Audit log created');
+
+    // Step 4: Delete Firebase Auth account
+    try {
+      await auth.deleteUser(userIdToDelete);
+      console.log('🔐 Firebase Auth account deleted');
+    } catch (authError) {
+      console.warn('⚠️ Auth deletion failed (user may not exist in Auth):', authError.message);
+      // Continue with Firestore deletion even if auth fails
+    }
+
+    // Step 5: Delete Firestore document
+    await db.collection('users').doc(userIdToDelete).delete();
+    console.log('🗃️ Firestore user document deleted');
+
+    console.log(`✅ Complete deletion finished for ${userData.email}`);
+
+    return {
+      success: true,
+      message: `User ${userData.email} completely deleted`,
+      proofsTransferred: proofsTransferred,
+      deletedFromAuth: true,
+      deletedFromFirestore: true
+    };
+
+  } catch (error) {
+    console.error('❌ Complete user deletion failed:', error);
+    throw new HttpsError('internal', `Deletion failed: ${error.message}`);
+  }
+});
 // Client Invitation Function
 exports.sendClientInvitation = onCall({
   secrets: [resendApiKey]
@@ -530,6 +674,7 @@ exports.healthCheck = onRequest(async (req, res) => {
       'sendClientInvitation',
       'sendProofNotification', 
       'transferProofOwnership',  // Added to health check
+      'deleteUserCompletely', // Add this line
       'handleNewProof',
       'handleProofStatusChange'
     ]
