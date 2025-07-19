@@ -24,7 +24,136 @@ const FROM_EMAIL_TESTING = 'no-reply@s-proof.app';
 const FROM_EMAIL = FROM_EMAIL_TESTING;
 const GMAIL_FALLBACK = 'isaactheking7@gmail.com'; // Gmail fallback for M365 delivery issues
 
-// NEW: Client Invitation Email Template
+// ✨ NEW: Smart Invitation Email Template
+const getSmartInvitationTemplate = (data) => {
+  const { clientName, inviterEmail, inviteUrl, hasPendingProofs, proofCount, proofs, totalProofs } = data;
+  
+  // Generate proof list HTML if there are pending proofs
+  const proofListHTML = hasPendingProofs ? `
+    <div style="background: #F7FAFC; border-radius: 12px; padding: 24px; margin: 24px 0;">
+      <h3 style="color: #2D3748; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">
+        🎨 ${proofCount === 1 ? 'Your Proof is' : `${proofCount} Proofs are`} Ready for Review:
+      </h3>
+      ${proofs.map(proof => `
+        <div style="background: #ffffff; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #4F46E5;">
+          <h4 style="color: #2D3748; font-size: 16px; font-weight: 600; margin: 0 0 8px 0;">
+            📄 ${proof.title}
+          </h4>
+          <p style="color: #4A5568; font-size: 14px; margin: 0 0 8px 0;">
+            <strong>File:</strong> ${proof.fileName}
+          </p>
+          <p style="color: #4A5568; font-size: 14px; margin: 0;">
+            <strong>Uploaded:</strong> ${new Date(proof.createdAt?.toDate?.() || proof.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+      `).join('')}
+      ${totalProofs > 3 ? `
+        <p style="color: #4A5568; font-size: 14px; margin: 12px 0 0 0; font-style: italic;">
+          + ${totalProofs - 3} more proof${totalProofs - 3 > 1 ? 's' : ''} waiting for you
+        </p>
+      ` : ''}
+    </div>
+  ` : '';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Cesar Graphics${hasPendingProofs ? ' - Proofs Ready!' : ''}</title>
+</head>
+<body style="margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;">
+    <div style="min-height: 100vh; padding: 40px 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">
+            
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #2D3748 0%, #1A202C 100%); padding: 40px 40px 60px 40px; text-align: center; position: relative;">
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);"></div>
+                <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0 0 8px 0; letter-spacing: -0.5px;">
+                    Welcome to Cesar Graphics
+                </h1>
+                <p style="color: #A0AEC0; font-size: 18px; margin: 0; font-weight: 400;">
+                    ${hasPendingProofs ? `${proofCount} Proof${proofCount > 1 ? 's' : ''} Ready for Review` : 'Proofing Portal Invitation'}
+                </p>
+            </div>
+
+            <!-- Content -->
+            <div style="padding: 40px;">
+                <div style="text-align: center; margin-bottom: 32px;">
+                    <h2 style="color: #2D3748; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">
+                        Hi ${clientName}! 🎉
+                    </h2>
+                    ${hasPendingProofs ? `
+                        <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">
+                            Welcome to Cesar Graphics! We've invited you to our proofing portal and you already have <strong>${proofCount} proof${proofCount > 1 ? 's' : ''}</strong> waiting for your review.
+                        </p>
+                        <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0;">
+                            Click the button below to create your account and review your proof${proofCount > 1 ? 's' : ''} immediately.
+                        </p>
+                    ` : `
+                        <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0;">
+                            You've been invited to join <strong>Cesar Graphics Proofing Portal</strong> by ${inviterEmail}. Our platform makes it easy to review and approve print designs.
+                        </p>
+                    `}
+                </div>
+
+                ${proofListHTML}
+
+                <!-- CTA Button -->
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4); transition: transform 0.2s;">
+                        ${hasPendingProofs ? `Get Started & Review ${proofCount > 1 ? 'Proofs' : 'Proof'}` : 'Accept Invitation & Get Started'}
+                    </a>
+                </div>
+
+                <!-- What to Expect -->
+                <div style="background: #F7FAFC; border-radius: 12px; padding: 24px; margin: 24px 0;">
+                    <h3 style="color: #2D3748; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">
+                        ${hasPendingProofs ? '🚀 What happens next:' : '🎯 What you can do:'}
+                    </h3>
+                    <ul style="color: #4A5568; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                        ${hasPendingProofs ? `
+                            <li style="margin-bottom: 8px;">Click the button above to create your account</li>
+                            <li style="margin-bottom: 8px;">Review your ${proofCount > 1 ? 'proofs' : 'proof'} in high quality</li>
+                            <li style="margin-bottom: 8px;">Approve or request changes with comments</li>
+                            <li style="margin-bottom: 0;">Get instant notifications on future proofs</li>
+                        ` : `
+                            <li style="margin-bottom: 8px;">Review high-quality proof images and PDFs</li>
+                            <li style="margin-bottom: 8px;">Approve or decline with detailed feedback</li>
+                            <li style="margin-bottom: 8px;">Track the status of all your projects</li>
+                            <li style="margin-bottom: 0;">Get instant email notifications for new proofs</li>
+                        `}
+                    </ul>
+                </div>
+
+                <!-- Support -->
+                <div style="text-align: center; padding: 20px 0;">
+                    <p style="color: #4A5568; font-size: 14px; margin: 0 0 8px 0;">
+                        Need help? Just reply to this email!
+                    </p>
+                    <p style="color: #2D3748; font-size: 16px; font-weight: 600; margin: 0;">
+                        Welcome to the team! 🎉
+                    </p>
+                    <p style="color: #4A5568; font-size: 14px; margin: 8px 0 0 0;">
+                        <strong>The Cesar Graphics Team</strong>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="background: #F7FAFC; padding: 20px; text-align: center; border-top: 1px solid #E2E8F0;">
+                <p style="color: #A0AEC0; font-size: 12px; margin: 0;">
+                    This invitation will expire in 7 days. ${hasPendingProofs ? 'Your proofs will remain available.' : 'If you need a new invitation, please contact us.'}
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+};
+
+// OLD: Basic Invitation Email Template (kept for backwards compatibility)
 const getClientInvitationTemplate = (clientName, inviterEmail, inviteUrl) => {
   return `
 <!DOCTYPE html>
@@ -281,6 +410,7 @@ exports.transferProofOwnership = onCall(async (request) => {
     throw new Error(`Failed to transfer proofs: ${error.message}`);
   }
 });
+
 // ⭐ NEW: Complete User Deletion Function
 exports.deleteUserCompletely = onCall(async (request) => {
   // Verify admin permissions
@@ -421,7 +551,8 @@ exports.deleteUserCompletely = onCall(async (request) => {
     throw new HttpsError('internal', `Deletion failed: ${error.message}`);
   }
 });
-// Client Invitation Function
+
+// ✨ UPDATED: Smart Client Invitation Function
 exports.sendClientInvitation = onCall({
   secrets: [resendApiKey]
 }, async (request) => {
@@ -446,30 +577,58 @@ exports.sendClientInvitation = onCall({
   try {
     const resend = new Resend(resendApiKey.value());
     
+    // ✨ NEW: Check for pending proofs for this email
+    const pendingProofsQuery = await db.collection('proofs')
+      .where('clientEmail', '==', clientEmail.toLowerCase())
+      .where('status', '==', 'pending')
+      .get();
+    
+    const pendingProofs = pendingProofsQuery.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    console.log(`📊 Found ${pendingProofs.length} pending proofs for ${clientEmail}`);
+    
+    // Prepare template data with proof information
+    const templateData = {
+      clientName,
+      inviterEmail: inviterEmail || 'Cesar Graphics',
+      inviteUrl,
+      hasPendingProofs: pendingProofs.length > 0,
+      proofCount: pendingProofs.length,
+      proofs: pendingProofs.slice(0, 3), // Show max 3 proofs in email
+      totalProofs: pendingProofs.length
+    };
+    
     const emailData = {
       from: FROM_EMAIL,
       to: clientEmail,
-      subject: '🎨 You\'re invited to Cesar Graphics Proofing Portal',
-      html: getClientInvitationTemplate(clientName, inviterEmail || 'Cesar Graphics', inviteUrl)
+      subject: pendingProofs.length > 0 
+        ? `🎨 Welcome to Cesar Graphics - ${pendingProofs.length} Proof${pendingProofs.length > 1 ? 's' : ''} Ready!`
+        : '🎨 You\'re invited to Cesar Graphics Proofing Portal',
+      html: getSmartInvitationTemplate(templateData)
     };
 
     const result = await resend.emails.send(emailData);
     
-    console.log('✅ Invitation email sent successfully:', {
+    console.log('✅ Smart invitation email sent successfully:', {
       to: clientEmail,
       clientName,
       inviterEmail,
+      proofCount: pendingProofs.length,
       resendId: result.data?.id
     });
 
     return { 
       success: true, 
-      message: 'Invitation sent successfully',
-      emailId: result.data?.id 
+      message: `Invitation sent successfully${pendingProofs.length > 0 ? ` with ${pendingProofs.length} proof(s)` : ''}`,
+      emailId: result.data?.id,
+      proofCount: pendingProofs.length
     };
 
   } catch (error) {
-    console.error('❌ Error sending invitation email:', error);
+    console.error('❌ Error sending smart invitation email:', error);
     throw new Error(`Failed to send invitation email: ${error.message}`);
   }
 });
@@ -527,9 +686,7 @@ exports.sendProofNotification = onCall({
   }
 });
 
-// EXISTING FUNCTIONS (keeping your current email functions)
-
-// Monitor when new proofs are created and send notifications
+// ✨ UPDATED: Smart handleNewProof function
 exports.handleNewProof = onDocumentCreated('proofs/{proofId}', {
   secrets: [resendApiKey]
 }, async (event) => {
@@ -546,56 +703,81 @@ exports.handleNewProof = onDocumentCreated('proofs/{proofId}', {
   try {
     const resend = new Resend(resendApiKey.value());
     
-    const emailData = {
-      from: FROM_EMAIL,
-      to: proof.clientEmail,
-      subject: `🎨 New Proof Ready: ${proof.title}`,
-      html: getClientNotificationTemplate(proof)
-    };
+    // ✨ NEW: Check client status before sending proof notification
+    const clientDoc = await db.collection('users').doc(proof.clientId).get();
+    
+    if (!clientDoc.exists) {
+      console.log('⚠️ Client document not found, skipping client notification');
+    } else {
+      const clientData = clientDoc.data();
+      console.log(`📋 Client status: ${clientData.status} for ${clientData.email}`);
+      
+      // Only send separate proof notification if client is already active
+      if (clientData.status === 'active') {
+        const emailData = {
+          from: FROM_EMAIL,
+          to: proof.clientEmail,
+          subject: `🎨 New Proof Ready: ${proof.title}`,
+          html: getClientNotificationTemplate(proof)
+        };
 
-    // Try primary email first
-    try {
-      const result = await resend.emails.send(emailData);
-      console.log('✅ Client notification sent via Resend:', result.data?.id);
-      
-      // Update proof with notification status
-      await event.data.ref.update({
-        emailSent: true,
-        emailSentAt: new Date(),
-        emailProvider: 'resend',
-        resendId: result.data?.id
-      });
-    } catch (resendError) {
-      console.error('❌ Resend failed, trying Gmail fallback:', resendError);
-      
-      // Gmail fallback for M365 delivery issues
-      const gmailEmailData = {
-        ...emailData,
-        to: GMAIL_FALLBACK,
-        subject: `[CLIENT: ${proof.clientEmail}] ${emailData.subject}`,
-        html: `
-          <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
-            <strong>📧 Forward this to: ${proof.clientEmail}</strong><br>
-            <small>Original delivery failed - M365 blocking detected</small>
-          </div>
-          ${emailData.html}
-        `
-      };
-      
-      const fallbackResult = await resend.emails.send(gmailEmailData);
-      console.log('📨 Fallback notification sent to admin Gmail:', fallbackResult.data?.id);
-      
-      await event.data.ref.update({
-        emailSent: true,
-        emailSentAt: new Date(),
-        emailProvider: 'resend-fallback',
-        originalRecipient: proof.clientEmail,
-        fallbackRecipient: GMAIL_FALLBACK,
-        resendId: fallbackResult.data?.id
-      });
+        // Try primary email first
+        try {
+          const result = await resend.emails.send(emailData);
+          console.log('✅ Client notification sent via Resend:', result.data?.id);
+          
+          // Update proof with notification status
+          await event.data.ref.update({
+            emailSent: true,
+            emailSentAt: new Date(),
+            emailProvider: 'resend',
+            resendId: result.data?.id
+          });
+        } catch (resendError) {
+          console.error('❌ Resend failed, trying Gmail fallback:', resendError);
+          
+          // Gmail fallback for M365 delivery issues
+          const gmailEmailData = {
+            ...emailData,
+            to: GMAIL_FALLBACK,
+            subject: `[CLIENT: ${proof.clientEmail}] ${emailData.subject}`,
+            html: `
+              <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
+                <strong>📧 Forward this to: ${proof.clientEmail}</strong><br>
+                <small>Original delivery failed - M365 blocking detected</small>
+              </div>
+              ${emailData.html}
+            `
+          };
+          
+          const fallbackResult = await resend.emails.send(gmailEmailData);
+          console.log('📨 Fallback notification sent to admin Gmail:', fallbackResult.data?.id);
+          
+          await event.data.ref.update({
+            emailSent: true,
+            emailSentAt: new Date(),
+            emailProvider: 'resend-fallback',
+            originalRecipient: proof.clientEmail,
+            fallbackRecipient: GMAIL_FALLBACK,
+            resendId: fallbackResult.data?.id
+          });
+        }
+      } else if (clientData.status === 'invited') {
+        console.log('🎯 Client recently invited - proof notification already included in invitation email');
+        
+        // Mark as notified but via invitation
+        await event.data.ref.update({
+          emailSent: true,
+          emailSentAt: new Date(),
+          emailProvider: 'invitation-included',
+          notificationMethod: 'smart-invitation'
+        });
+      } else {
+        console.log(`⚠️ Client status "${clientData.status}" - skipping notification`);
+      }
     }
 
-    // Also notify admin
+    // ✅ ALWAYS notify admin regardless of client status
     const adminEmailData = {
       from: FROM_EMAIL,
       to: ADMIN_EMAIL,
@@ -604,9 +786,13 @@ exports.handleNewProof = onDocumentCreated('proofs/{proofId}', {
         <h2>New Proof Notification</h2>
         <p><strong>Project:</strong> ${proof.title}</p>
         <p><strong>Client:</strong> ${proof.clientName} (${proof.clientEmail})</p>
+        <p><strong>Client Status:</strong> ${clientDoc.exists ? clientDoc.data().status : 'Unknown'}</p>
         <p><strong>Uploaded by:</strong> ${proof.uploaderEmail}</p>
         <p><strong>File:</strong> ${proof.fileName}</p>
         <p><strong>View:</strong> <a href="${FRONTEND_URL}/proof/${proofId}">Review Proof</a></p>
+        ${clientDoc.exists && clientDoc.data().status === 'invited' ? 
+          '<p><strong>📧 Note:</strong> Client notification included in invitation email</p>' : 
+          ''}
       `
     };
 
