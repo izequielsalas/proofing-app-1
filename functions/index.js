@@ -25,319 +25,1003 @@ const FROM_EMAIL = FROM_EMAIL_TESTING;
 const GMAIL_FALLBACK = 'isaactheking7@gmail.com'; // Gmail fallback for M365 delivery issues
 
 // ✨ NEW: Smart Invitation Email Template
+// UPDATED: Smart Invitation Template with Cesar Graphics Branding
+// ✨ FIXED: Smart Invitation Template with Proper HTML Structure
+// ✨ CORRECTED: Smart Invitation Template with True Brand Colors
+// ✨ UPDATED: Smart Invitation Template with Navy Gradients
 const getSmartInvitationTemplate = (data) => {
   const { clientName, inviterEmail, inviteUrl, hasPendingProofs, proofCount, proofs, totalProofs } = data;
   
-  // Generate proof list HTML if there are pending proofs
-  const proofListHTML = hasPendingProofs ? `
-    <div style="background: #F7FAFC; border-radius: 12px; padding: 24px; margin: 24px 0;">
-      <h3 style="color: #2D3748; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">
-        🎨 ${proofCount === 1 ? 'Your Proof is' : `${proofCount} Proofs are`} Ready for Review:
-      </h3>
-      ${proofs.map(proof => `
-        <div style="background: #ffffff; border-radius: 8px; padding: 16px; margin-bottom: 12px; border-left: 4px solid #4F46E5;">
-          <h4 style="color: #2D3748; font-size: 16px; font-weight: 600; margin: 0 0 8px 0;">
-            📄 ${proof.title}
-          </h4>
-          <p style="color: #4A5568; font-size: 14px; margin: 0 0 8px 0;">
-            <strong>File:</strong> ${proof.fileName}
-          </p>
-          <p style="color: #4A5568; font-size: 14px; margin: 0;">
-            <strong>Uploaded:</strong> ${new Date(proof.createdAt?.toDate?.() || proof.createdAt).toLocaleDateString()}
-          </p>
-        </div>
-      `).join('')}
-      ${totalProofs > 3 ? `
-        <p style="color: #4A5568; font-size: 14px; margin: 12px 0 0 0; font-style: italic;">
-          + ${totalProofs - 3} more proof${totalProofs - 3 > 1 ? 's' : ''} waiting for you
-        </p>
-      ` : ''}
-    </div>
-  ` : '';
-
-  return `
-<!DOCTYPE html>
-<html>
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Cesar Graphics${hasPendingProofs ? ' - Proofs Ready!' : ''}</title>
-</head>
-<body style="margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;">
-    <div style="min-height: 100vh; padding: 40px 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Welcome to Cesar Graphics</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:AllowPNG/>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%) !important;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        
+        table {
+            border-collapse: collapse;
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        
+        img {
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+            -ms-interpolation-mode: bicubic;
+        }
+        
+        .cesar-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 40, 86, 0.25);
+        }
+        
+        .cesar-header {
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            padding: 40px 40px 60px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .cesar-brand-stripe {
+            height: 4px;
+            background: linear-gradient(90deg, #002856 0%, #00A7E1 50%, #BBBBBB 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+        
+        .cesar-logo {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.5px;
+        }
+        
+        .cesar-tagline {
+            color: #ffffff;
+            opacity: 0.9;
+            font-size: 18px;
+            margin: 0;
+            font-weight: 400;
+        }
+        
+        .cesar-content {
+            padding: 40px;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+        }
+        
+        .cesar-greeting {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .cesar-greeting h2 {
+            color: #002856;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+        }
+        
+        .cesar-greeting p {
+            color: #333333;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0;
+        }
+        
+        .cesar-proofs-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .cesar-proofs-title {
+            color: #002856;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+            text-align: center;
+        }
+        
+        .cesar-proof-item {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #BBBBBB;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .cesar-proof-title {
+            font-weight: 600;
+            color: #002856;
+            margin-bottom: 4px;
+        }
+        
+        .cesar-proof-date {
+            color: #666666;
+            font-size: 14px;
+        }
+        
+        .cesar-cta {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .cesar-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            color: #ffffff !important;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            box-shadow: 0 6px 16px rgba(0, 40, 86, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .cesar-button:hover {
+            background: linear-gradient(135deg, #003d73 0%, #004a8a 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 40, 86, 0.4);
+        }
+        
+        .cesar-features {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .cesar-features h3 {
+            color: #002856;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 20px 0;
+            text-align: center;
+        }
+        
+        .cesar-features-grid {
+            display: table;
+            width: 100%;
+        }
+        
+        .cesar-feature-row {
+            display: table-row;
+        }
+        
+        .cesar-feature-item {
+            display: table-cell;
+            text-align: center;
+            padding: 0 8px;
+            vertical-align: top;
+            width: 50%;
+        }
+        
+        .cesar-feature-icon {
+            background: linear-gradient(135deg, #00A7E1 0%, #0088c7 100%);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-size: 20px;
+            box-shadow: 0 4px 8px rgba(0, 167, 225, 0.3);
+        }
+        
+        .cesar-feature-icon.grey {
+            background: linear-gradient(135deg, #BBBBBB 0%, #999999 100%);
+            box-shadow: 0 4px 8px rgba(187, 187, 187, 0.3);
+        }
+        
+        .cesar-feature-title {
+            font-weight: 600;
+            color: #002856;
+            margin-bottom: 4px;
+        }
+        
+        .cesar-feature-desc {
+            color: #666666;
+            font-size: 14px;
+        }
+        
+        .cesar-support {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .cesar-footer {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .cesar-footer p {
+            color: #666666;
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        /* Mobile Styles */
+        @media screen and (max-width: 600px) {
+            .cesar-container {
+                margin: 10px;
+                border-radius: 8px;
+            }
             
+            .cesar-header {
+                padding: 30px 20px 40px 20px;
+            }
+            
+            .cesar-content {
+                padding: 30px 20px;
+            }
+            
+            .cesar-logo {
+                font-size: 28px;
+            }
+            
+            .cesar-features-grid {
+                display: block;
+            }
+            
+            .cesar-feature-item {
+                display: block;
+                margin-bottom: 20px;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div style="min-height: 100vh; padding: 40px 20px; background: linear-gradient(135deg, #002856 0%, #003d73 100%);">
+        <div class="cesar-container">
             <!-- Header -->
-            <div style="background: linear-gradient(135deg, #2D3748 0%, #1A202C 100%); padding: 40px 40px 60px 40px; text-align: center; position: relative;">
-                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);"></div>
-                <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0 0 8px 0; letter-spacing: -0.5px;">
-                    Welcome to Cesar Graphics
-                </h1>
-                <p style="color: #A0AEC0; font-size: 18px; margin: 0; font-weight: 400;">
-                    ${hasPendingProofs ? `${proofCount} Proof${proofCount > 1 ? 's' : ''} Ready for Review` : 'Proofing Portal Invitation'}
-                </p>
+            <div class="cesar-header">
+                <div class="cesar-brand-stripe"></div>
+                <h1 class="cesar-logo">CESAR GRAPHICS</h1>
+                <p class="cesar-tagline">${hasPendingProofs ? 'Welcome & Proofs Ready!' : 'Proofing Portal Invitation'}</p>
             </div>
 
             <!-- Content -->
-            <div style="padding: 40px;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <h2 style="color: #2D3748; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">
-                        Hi ${clientName}! 🎉
-                    </h2>
-                    ${hasPendingProofs ? `
-                        <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0 0 8px 0;">
-                            Welcome to Cesar Graphics! We've invited you to our proofing portal and you already have <strong>${proofCount} proof${proofCount > 1 ? 's' : ''}</strong> waiting for your review.
-                        </p>
-                        <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0;">
-                            Click the button below to create your account and review your proof${proofCount > 1 ? 's' : ''} immediately.
-                        </p>
-                    ` : `
-                        <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0;">
-                            You've been invited to join <strong>Cesar Graphics Proofing Portal</strong> by ${inviterEmail}. Our platform makes it easy to review and approve print designs.
-                        </p>
-                    `}
+            <div class="cesar-content">
+                <div class="cesar-greeting">
+                    <h2>Hi ${clientName}! ${hasPendingProofs ? '🎨' : '👋'}</h2>
+                    <p>${hasPendingProofs 
+                      ? `Welcome to our professional proofing portal! You have <strong>${proofCount} proof${proofCount > 1 ? 's' : ''}</strong> ready for your review.`
+                      : `You've been invited by <strong>${inviterEmail}</strong> to access our professional proofing portal.`
+                    }</p>
                 </div>
 
-                ${proofListHTML}
+                ${hasPendingProofs ? `
+                <!-- Pending Proofs Section -->
+                <div class="cesar-proofs-section">
+                    <h3 class="cesar-proofs-title">🎯 Proofs Awaiting Your Review</h3>
+                    ${proofs.slice(0, 3).map(proof => `
+                        <div class="cesar-proof-item">
+                            <div class="cesar-proof-title">${proof.title || 'Untitled Proof'}</div>
+                            <div class="cesar-proof-date">
+                                Uploaded: ${new Date(proof.createdAt.seconds * 1000).toLocaleDateString()}
+                            </div>
+                        </div>
+                    `).join('')}
+                    ${totalProofs > 3 ? `
+                        <div style="text-align: center; color: #666666; font-style: italic; margin-top: 16px;">
+                            And ${totalProofs - 3} more proof${totalProofs - 3 > 1 ? 's' : ''} waiting for you...
+                        </div>
+                    ` : ''}
+                </div>
+                ` : ''}
 
                 <!-- CTA Button -->
-                <div style="text-align: center; margin: 32px 0;">
-                    <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4); transition: transform 0.2s;">
-                        ${hasPendingProofs ? `Get Started & Review ${proofCount > 1 ? 'Proofs' : 'Proof'}` : 'Accept Invitation & Get Started'}
+                <div class="cesar-cta">
+                    <a href="${inviteUrl}" class="cesar-button">
+                        ${hasPendingProofs ? '🚀 Review My Proofs' : '🎨 Access Proofing Portal'}
                     </a>
                 </div>
 
-                <!-- What to Expect -->
-                <div style="background: #F7FAFC; border-radius: 12px; padding: 24px; margin: 24px 0;">
-                    <h3 style="color: #2D3748; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">
-                        ${hasPendingProofs ? '🚀 What happens next:' : '🎯 What you can do:'}
-                    </h3>
-                    <ul style="color: #4A5568; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
-                        ${hasPendingProofs ? `
-                            <li style="margin-bottom: 8px;">Click the button above to create your account</li>
-                            <li style="margin-bottom: 8px;">Review your ${proofCount > 1 ? 'proofs' : 'proof'} in high quality</li>
-                            <li style="margin-bottom: 8px;">Approve or request changes with comments</li>
-                            <li style="margin-bottom: 0;">Get instant notifications on future proofs</li>
-                        ` : `
-                            <li style="margin-bottom: 8px;">Review high-quality proof images and PDFs</li>
-                            <li style="margin-bottom: 8px;">Approve or decline with detailed feedback</li>
-                            <li style="margin-bottom: 8px;">Track the status of all your projects</li>
-                            <li style="margin-bottom: 0;">Get instant email notifications for new proofs</li>
-                        `}
-                    </ul>
-                </div>
-
-                <!-- Support -->
-                <div style="text-align: center; padding: 20px 0;">
-                    <p style="color: #4A5568; font-size: 14px; margin: 0 0 8px 0;">
-                        Need help? Just reply to this email!
-                    </p>
-                    <p style="color: #2D3748; font-size: 16px; font-weight: 600; margin: 0;">
-                        Welcome to the team! 🎉
-                    </p>
-                    <p style="color: #4A5568; font-size: 14px; margin: 8px 0 0 0;">
-                        <strong>The Cesar Graphics Team</strong>
-                    </p>
-                </div>
-            </div>
-
-            <!-- Footer -->
-            <div style="background: #F7FAFC; padding: 20px; text-align: center; border-top: 1px solid #E2E8F0;">
-                <p style="color: #A0AEC0; font-size: 12px; margin: 0;">
-                    This invitation will expire in 7 days. ${hasPendingProofs ? 'Your proofs will remain available.' : 'If you need a new invitation, please contact us.'}
-                </p>
-            </div>
-        </div>
-    </div>
-</body>
-</html>`;
-};
-
-// OLD: Basic Invitation Email Template (kept for backwards compatibility)
-const getClientInvitationTemplate = (clientName, inviterEmail, inviteUrl) => {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Cesar Graphics Proofing Portal</title>
-</head>
-<body style="margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;">
-    <div style="min-height: 100vh; padding: 40px 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">
-            
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #2D3748 0%, #1A202C 100%); padding: 40px 40px 60px 40px; text-align: center; position: relative;">
-                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);"></div>
-                <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0 0 8px 0; letter-spacing: -0.5px;">
-                    Welcome to Cesar Graphics
-                </h1>
-                <p style="color: #A0AEC0; font-size: 18px; margin: 0; font-weight: 400;">
-                    Proofing Portal Invitation
-                </p>
-            </div>
-
-            <!-- Content -->
-            <div style="padding: 40px;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <h2 style="color: #2D3748; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">
-                        Hi ${clientName}! 👋
-                    </h2>
-                    <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0;">
-                        You've been invited by <strong>${inviterEmail}</strong> to access our professional proofing portal.
-                    </p>
-                </div>
-
-                <!-- Features -->
-                <div style="background: #F7FAFC; border-radius: 12px; padding: 24px; margin-bottom: 32px;">
-                    <h3 style="color: #2D3748; font-size: 18px; font-weight: 600; margin: 0 0 16px 0; text-align: center;">
-                        🎨 What you can do:
-                    </h3>
-                    <ul style="color: #4A5568; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;">✅ Review and approve design proofs instantly</li>
-                        <li style="margin-bottom: 8px;">💬 Request changes with detailed feedback</li>
-                        <li style="margin-bottom: 8px;">📊 Track the status of all your projects</li>
-                        <li style="margin-bottom: 8px;">⬇️ Download final approved files</li>
-                        <li style="margin-bottom: 0;">📱 Access from any device, anywhere</li>
-                    </ul>
-                </div>
-
-                <!-- CTA Button -->
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4); transition: all 0.2s;">
-                        🚀 Accept Invitation & Create Account
-                    </a>
-                </div>
-
-                <!-- Backup Link -->
-                <div style="background: #EDF2F7; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                    <p style="color: #4A5568; font-size: 14px; margin: 0 0 8px 0; font-weight: 500;">
-                        Button not working? Copy and paste this link:
-                    </p>
-                    <p style="color: #2B6CB0; font-size: 12px; word-break: break-all; background: #ffffff; padding: 8px; border-radius: 4px; margin: 0; border: 1px solid #E2E8F0;">
-                        ${inviteUrl}
-                    </p>
-                </div>
-
-                <!-- Support -->
-                <div style="text-align: center; border-top: 1px solid #E2E8F0; padding-top: 24px;">
-                    <p style="color: #718096; font-size: 14px; margin: 0 0 8px 0;">
-                        Questions? Need help? Just reply to this email!
-                    </p>
-                    <p style="color: #2D3748; font-size: 16px; font-weight: 600; margin: 0;">
-                        Welcome to the team! 🎉
-                    </p>
-                    <p style="color: #4A5568; font-size: 14px; margin: 8px 0 0 0;">
-                        <strong>The Cesar Graphics Team</strong>
-                    </p>
-                </div>
-            </div>
-
-            <!-- Footer -->
-            <div style="background: #F7FAFC; padding: 20px; text-align: center; border-top: 1px solid #E2E8F0;">
-                <p style="color: #A0AEC0; font-size: 12px; margin: 0;">
-                    This invitation will expire in 7 days. If you need a new invitation, please contact us.
-                </p>
-            </div>
-        </div>
-    </div>
-</body>
-</html>`;
-};
-
-// MODERN CLIENT EMAIL TEMPLATE - Sleek & Professional (EXISTING)
-const getClientNotificationTemplate = (data) => {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Proof Ready - Cesar Graphics</title>
-</head>
-<body style="margin: 0; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;">
-    <div style="min-height: 100vh; padding: 40px 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">
-            
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #2D3748 0%, #1A202C 100%); padding: 40px 40px 60px 40px; text-align: center; position: relative;">
-                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 50%, #EC4899 100%);"></div>
-                <h1 style="color: #ffffff; font-size: 32px; font-weight: 700; margin: 0 0 8px 0; letter-spacing: -0.5px;">
-                    Cesar Graphics
-                </h1>
-                <p style="color: #A0AEC0; font-size: 18px; margin: 0; font-weight: 400;">
-                    Proof Ready for Review
-                </p>
-            </div>
-
-            <!-- Content -->
-            <div style="padding: 40px;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <h2 style="color: #2D3748; font-size: 24px; font-weight: 600; margin: 0 0 16px 0;">
-                        Hi ${data.clientName}! 🎨
-                    </h2>
-                    <p style="color: #4A5568; font-size: 16px; line-height: 1.6; margin: 0;">
-                        Your proof for <strong>"${data.title}"</strong> is ready for review!
-                    </p>
-                </div>
-
-                <!-- Urgency Banner -->
-                <div style="background: linear-gradient(135deg, #FED7D7 0%, #FEB2B2 100%); border-left: 4px solid #E53E3E; border-radius: 8px; padding: 16px; margin-bottom: 32px;">
-                    <div style="display: flex; align-items: center;">
-                        <span style="font-size: 24px; margin-right: 12px;">⏰</span>
-                        <div>
-                            <p style="color: #C53030; font-weight: 600; margin: 0 0 4px 0; font-size: 14px;">
-                                ACTION REQUIRED
-                            </p>
-                            <p style="color: #742A2A; margin: 0; font-size: 14px; line-height: 1.4;">
-                                Please review and approve your proof as soon as possible to keep your project on schedule.
-                            </p>
+                <!-- Features Section -->
+                <div class="cesar-features">
+                    <h3>What You Can Do</h3>
+                    <div class="cesar-features-grid">
+                        <div class="cesar-feature-row">
+                            <div class="cesar-feature-item">
+                                <div class="cesar-feature-icon">✓</div>
+                                <div class="cesar-feature-title">Quick Approval</div>
+                                <div class="cesar-feature-desc">Approve designs instantly</div>
+                            </div>
+                            <div class="cesar-feature-item">
+                                <div class="cesar-feature-icon grey">💬</div>
+                                <div class="cesar-feature-title">Easy Feedback</div>
+                                <div class="cesar-feature-desc">Request changes clearly</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Review Steps -->
-                <div style="background: #F7FAFC; border-radius: 12px; padding: 24px; margin-bottom: 32px;">
-                    <h3 style="color: #2D3748; font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">
-                        📋 How to review your proof:
-                    </h3>
-                    <ol style="color: #4A5568; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
-                        <li style="margin-bottom: 8px;"><strong>Click the button below</strong> to access your account</li>
-                        <li style="margin-bottom: 8px;"><strong>Review the proof carefully</strong> - check all text, images, and colors</li>
-                        <li style="margin-bottom: 8px;"><strong>Either approve it or request changes</strong> with specific feedback</li>
-                        <li style="margin-bottom: 0;"><strong>Add any comments</strong> to help us perfect your design</li>
-                    </ol>
-                </div>
-
-                <!-- CTA Button -->
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <a href="${FRONTEND_URL}/auth" style="display: inline-block; background: linear-gradient(135deg, #48BB78 0%, #38A169 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(72, 187, 120, 0.4);">
-                        👀 Review Your Proof Now
-                    </a>
-                </div>
-
-                <!-- Support -->
-                <div style="text-align: center; border-top: 1px solid #E2E8F0; padding-top: 24px;">
-                    <p style="color: #718096; font-size: 14px; margin: 0 0 8px 0;">
-                        Questions about your proof? Need assistance? Just reply to this email!
+                <!-- Support Information -->
+                <div class="cesar-support">
+                    <p style="color: #666666; font-size: 14px; margin: 0 0 12px 0;">
+                        Need help? Just reply to this email!
                     </p>
-                    <p style="color: #2D3748; font-size: 16px; font-weight: 600; margin: 0;">
-                        Thank you for choosing Cesar Graphics! 🙏
+                    <p style="color: #002856; font-size: 16px; font-weight: 600; margin: 0;">
+                        Welcome to the team! 🎉
+                    </p>
+                    <p style="color: #666666; font-size: 14px; margin: 8px 0 0 0;">
+                        <strong>The Cesar Graphics Team</strong>
                     </p>
                 </div>
             </div>
 
             <!-- Footer -->
-            <div style="background: #F7FAFC; padding: 20px; text-align: center;">
-                <p style="color: #A0AEC0; font-size: 12px; margin: 0;">
-                    Cesar Graphics | Professional Printing & Design Services
-                </p>
+            <div class="cesar-footer">
+                <p>This invitation will expire in 7 days. If you need a new invitation, please contact us.</p>
             </div>
         </div>
     </div>
 </body>
 </html>`;
+};
+
+
+// OLD: Basic Invitation Email Template (kept for backwards compatibility)
+// UPDATED: Basic Client Invitation Template with Cesar Graphics Branding
+// ✨ CORRECTED: Basic Client Invitation Template
+// ✨ UPDATED: Basic Client Invitation Template with Navy Gradients
+const getClientInvitationTemplate = (clientName, inviterEmail, inviteUrl) => {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Cesar Graphics Proofing Portal</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 40, 86, 0.25);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            padding: 40px 40px 60px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .brand-stripe {
+            height: 4px;
+            background: linear-gradient(90deg, #002856 0%, #00A7E1 50%, #BBBBBB 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+        
+        .logo {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.5px;
+        }
+        
+        .tagline {
+            color: #ffffff;
+            opacity: 0.9;
+            font-size: 18px;
+            margin: 0;
+            font-weight: 400;
+        }
+        
+        .content {
+            padding: 40px;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+        }
+        
+        .greeting h2 {
+            color: #002856;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+            text-align: center;
+        }
+        
+        .greeting p {
+            color: #333333;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0 0 32px 0;
+            text-align: center;
+        }
+        
+        .cta {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            color: #ffffff !important;
+            padding: 18px 36px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            box-shadow: 0 6px 16px rgba(0, 40, 86, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .button:hover {
+            background: linear-gradient(135deg, #003d73 0%, #004a8a 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 40, 86, 0.5);
+        }
+        
+        .features {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 32px;
+        }
+        
+        .features h3 {
+            color: #002856;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 24px 0;
+            text-align: center;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .feature-item {
+            text-align: center;
+        }
+        
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .feature-icon.blue { 
+            background: linear-gradient(135deg, #00A7E1 0%, #0088c7 100%); 
+            box-shadow: 0 4px 8px rgba(0, 167, 225, 0.3); 
+        }
+        .feature-icon.grey { 
+            background: linear-gradient(135deg, #BBBBBB 0%, #999999 100%); 
+            box-shadow: 0 4px 8px rgba(187, 187, 187, 0.3); 
+        }
+        .feature-icon.navy { 
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%); 
+            box-shadow: 0 4px 8px rgba(0, 40, 86, 0.3); 
+        }
+        .feature-icon.teal { 
+            background: linear-gradient(135deg, #00A7E1 0%, #0088c7 100%); 
+            box-shadow: 0 4px 8px rgba(0, 167, 225, 0.3); 
+        }
+        
+        .feature-title {
+            font-weight: 600;
+            color: #002856;
+            margin-bottom: 6px;
+        }
+        
+        .feature-desc {
+            color: #666666;
+            font-size: 14px;
+        }
+        
+        .support {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .footer {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .footer p {
+            color: #666666;
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        @media screen and (max-width: 600px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div style="min-height: 100vh; padding: 40px 20px; background: linear-gradient(135deg, #002856 0%, #003d73 100%);">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <div class="brand-stripe"></div>
+                <h1 class="logo">CESAR GRAPHICS</h1>
+                <p class="tagline">Proofing Portal Invitation</p>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <div class="greeting">
+                    <h2>Hi ${clientName}! 👋</h2>
+                    <p>You've been invited by <strong>${inviterEmail}</strong> to access our professional proofing portal.
+                    Review designs, provide feedback, and approve projects all in one place.</p>
+                </div>
+
+                <!-- CTA Button -->
+                <div class="cta">
+                    <a href="${inviteUrl}" class="button">
+                        🚀 Get Started Now
+                    </a>
+                </div>
+
+                <!-- Features Grid -->
+                <div class="features">
+                    <h3>What You'll Love About Our Portal</h3>
+                    <div class="features-grid">
+                        <div class="feature-item">
+                            <div class="feature-icon blue">⚡</div>
+                            <div class="feature-title">Lightning Fast</div>
+                            <div class="feature-desc">Approve designs in seconds</div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon grey">💬</div>
+                            <div class="feature-title">Easy Communication</div>
+                            <div class="feature-desc">Clear feedback tools</div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon teal">📱</div>
+                            <div class="feature-title">Mobile Friendly</div>
+                            <div class="feature-desc">Works on any device</div>
+                        </div>
+                        <div class="feature-item">
+                            <div class="feature-icon navy">🔒</div>
+                            <div class="feature-title">Secure & Private</div>
+                            <div class="feature-desc">Your projects stay confidential</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support Information -->
+                <div class="support">
+                    <p style="color: #666666; font-size: 14px; margin: 0 0 12px 0;">
+                        Need help getting started? We're here for you!
+                    </p>
+                    <p style="color: #002856; font-size: 16px; font-weight: 600; margin: 0;">
+                        Welcome to the Cesar Graphics family! 🎉
+                    </p>
+                    <p style="color: #666666; font-size: 14px; margin: 8px 0 0 0;">
+                        <strong>The Cesar Graphics Team</strong>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <p>This invitation will expire in 7 days. Questions? Just reply to this email.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+};
+
+
+// MODERN CLIENT EMAIL TEMPLATE - Sleek & Professional (EXISTING)
+// UPDATED: Client Notification Template with Cesar Graphics Branding
+// ✨ FIXED: Client Notification Template
+// ✨ CORRECTED: Client Notification Template
+// ✨ UPDATED: Client Notification Template with Navy Gradients
+const getClientNotificationTemplate = (data) => {
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>New Proof Ready - Cesar Graphics</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%) !important;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 40, 86, 0.25);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            padding: 40px 40px 60px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .brand-stripe {
+            height: 4px;
+            background: linear-gradient(90deg, #002856 0%, #00A7E1 50%, #BBBBBB 100%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+        }
+        
+        .logo {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            letter-spacing: -0.5px;
+        }
+        
+        .tagline {
+            color: #ffffff;
+            opacity: 0.9;
+            font-size: 18px;
+            margin: 0;
+            font-weight: 400;
+        }
+        
+        .content {
+            padding: 40px;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8f9fa 100%);
+        }
+        
+        .greeting {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .greeting h2 {
+            color: #002856;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 0 16px 0;
+        }
+        
+        .greeting p {
+            color: #333333;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0;
+        }
+        
+        .proof-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px solid #e9ecef;
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .proof-icon {
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            color: white;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+            box-shadow: 0 8px 16px rgba(0, 40, 86, 0.3);
+        }
+        
+        .proof-title {
+            color: #002856;
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+        }
+        
+        .proof-desc {
+            color: #666666;
+            font-size: 16px;
+            margin: 0;
+        }
+        
+        .actions {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 0 8px 12px 8px;
+            color: #ffffff !important;
+            transition: all 0.3s ease;
+        }
+        
+        .button-approve {
+            background: linear-gradient(135deg, #00A7E1 0%, #0088c7 100%);
+            box-shadow: 0 4px 12px rgba(0, 167, 225, 0.3);
+        }
+        
+        .button-approve:hover {
+            background: linear-gradient(135deg, #0088c7 0%, #006da3 100%);
+            transform: translateY(-1px);
+        }
+        
+        .button-review {
+            background: linear-gradient(135deg, #002856 0%, #003d73 100%);
+            box-shadow: 0 4px 12px rgba(0, 40, 86, 0.3);
+        }
+        
+        .button-review:hover {
+            background: linear-gradient(135deg, #003d73 0%, #004a8a 100%);
+            transform: translateY(-1px);
+        }
+        
+        .features {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+        
+        .features-grid {
+            display: table;
+            width: 100%;
+        }
+        
+        .feature-row {
+            display: table-row;
+        }
+        
+        .feature-item {
+            display: table-cell;
+            text-align: center;
+            padding: 0 10px;
+            vertical-align: top;
+            width: 50%;
+        }
+        
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .feature-icon.blue { color: #00A7E1; }
+        .feature-icon.grey { color: #BBBBBB; }
+        
+        .feature-title {
+            font-weight: 600;
+            color: #002856;
+            margin-bottom: 4px;
+        }
+        
+        .feature-desc {
+            color: #666666;
+            font-size: 14px;
+        }
+        
+        .support {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .footer {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        
+        .footer p {
+            color: #666666;
+            font-size: 12px;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div style="min-height: 100vh; padding: 40px 20px; background: linear-gradient(135deg, #002856 0%, #003d73 100%);">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <div class="brand-stripe"></div>
+                <h1 class="logo">CESAR GRAPHICS</h1>
+                <p class="tagline">Proof Ready for Review</p>
+            </div>
+
+            <!-- Content -->
+            <div class="content">
+                <div class="greeting">
+                    <h2>Hi ${data.clientName}! 🎨</h2>
+                    <p>Your proof for <strong>"${data.title}"</strong> is ready for review!</p>
+                </div>
+
+                <!-- Proof Preview Card -->
+                <div class="proof-card">
+                    <div class="proof-icon">🎯</div>
+                    <h3 class="proof-title">"${data.title}"</h3>
+                    <p class="proof-desc">Your design is ready for approval or feedback</p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="actions">
+                    <a href="#" class="button button-approve">✓ Quick Approve</a>
+                    <a href="#" class="button button-review">👁️ View & Review</a>
+                </div>
+
+                <!-- Features -->
+                <div class="features">
+                    <div class="features-grid">
+                        <div class="feature-row">
+                            <div class="feature-item">
+                                <div class="feature-icon blue">⚡</div>
+                                <div class="feature-title">Fast Review</div>
+                                <div class="feature-desc">One-click approval process</div>
+                            </div>
+                            <div class="feature-item">
+                                <div class="feature-icon grey">💬</div>
+                                <div class="feature-title">Clear Feedback</div>
+                                <div class="feature-desc">Request specific changes</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Support -->
+                <div class="support">
+                    <p style="color: #666666; font-size: 14px; margin: 0 0 12px 0;">
+                        Questions about your proof? Just reply to this email!
+                    </p>
+                    <p style="color: #002856; font-size: 16px; font-weight: 600; margin: 0;">
+                        Thanks for choosing Cesar Graphics! 🙏
+                    </p>
+                    <p style="color: #666666; font-size: 14px; margin: 8px 0 0 0;">
+                        <strong>Your Design Team</strong>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <p>You're receiving this because you have an active project with Cesar Graphics.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+};
+
+// ✨ ENHANCED: Resend Email Function with Better Configuration
+const sendEmailWithResend = async (resend, emailData) => {
+  try {
+    // Enhanced email data with proper headers for HTML rendering
+    const enhancedEmailData = {
+      ...emailData,
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high'
+      },
+      // Add text fallback for better delivery
+      text: `
+Hi ${emailData.clientName || 'there'}!
+
+${emailData.subject.includes('Welcome') ? 
+  'Welcome to Cesar Graphics! You\'ve been invited to our proofing portal.' :
+  'Your proof is ready for review!'
+}
+
+Please visit: ${emailData.inviteUrl || 'your account'}
+
+If you need help, just reply to this email.
+
+Best regards,
+The Cesar Graphics Team
+      `.trim()
+    };
+
+    const result = await resend.emails.send(enhancedEmailData);
+    return result;
+  } catch (error) {
+    console.error('Resend delivery failed:', error);
+    throw error;
+  }
 };
 
 // ⭐ NEW: Proof Ownership Transfer Function
@@ -607,7 +1291,14 @@ exports.sendClientInvitation = onCall({
       subject: pendingProofs.length > 0 
         ? `🎨 Welcome to Cesar Graphics - ${pendingProofs.length} Proof${pendingProofs.length > 1 ? 's' : ''} Ready!`
         : '🎨 You\'re invited to Cesar Graphics Proofing Portal',
-      html: getSmartInvitationTemplate(templateData)
+      html: getSmartInvitationTemplate(templateData),
+      // ADD THESE LINES FOR BETTER HTML SUPPORT:
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high'
+      },
+      text: `Hi ${clientName}! Welcome to Cesar Graphics. Please visit: ${inviteUrl}`
     };
 
     const result = await resend.emails.send(emailData);
