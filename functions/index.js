@@ -1378,7 +1378,8 @@ exports.sendProofNotification = onCall({
 });
 
 // ✨ UPDATED: Smart handleNewProof function
-exports.handleNewProof = onDocumentCreated('proofs/{proofId}', {
+exports.handleNewProof = onDocumentCreated({
+  document: 'proofs/{proofId}',
   secrets: [resendApiKey]
 }, async (event) => {
   const proof = event.data.data();
@@ -1496,7 +1497,8 @@ exports.handleNewProof = onDocumentCreated('proofs/{proofId}', {
 });
 
 // Monitor proof status changes and send notifications  
-exports.handleProofStatusChange = onDocumentUpdated('proofs/{proofId}', {
+exports.handleProofStatusChange = onDocumentUpdated({
+  document: 'proofs/{proofId}',
   secrets: [resendApiKey]
 }, async (event) => {
   const beforeData = event.data.before.data();
