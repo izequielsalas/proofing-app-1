@@ -12,7 +12,7 @@ import { signOut } from 'firebase/auth';
 import { Link } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import ProofGrid from './proofGrid';
+import ProofGrid from './ProofGrid';
 import UploadProof from './uploadProof';
 import { Search, Filter, Upload, Users, LogOut } from 'lucide-react';
 
