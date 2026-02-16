@@ -941,8 +941,7 @@ const getClientNotificationTemplate = (data) => {
 
                 <!-- Action Buttons -->
                 <div class="actions">
-                    <a href="#" class="button button-approve">✓ Quick Approve</a>
-                    <a href="#" class="button button-review">👁️ View & Review</a>
+                    <a href="${data.loginUrl || 'https://proofingapp1.web.app/auth'}" class="button button-review">👁️ View & Review</a>
                 </div>
 
                 <!-- Features -->
@@ -1353,7 +1352,7 @@ exports.sendProofNotification = onCall({
       from: FROM_EMAIL,
       to: clientEmail,
       subject: `🎨 New Proof Ready: ${projectTitle}`,
-      html: getClientNotificationTemplate(templateData)
+      html: getClientNotificationTemplate({ ...templateData, loginUrl: FRONTEND_URL + '/auth' })
     };
 
     const result = await resend.emails.send(emailData);
@@ -1396,77 +1395,17 @@ exports.handleNewProof = onDocumentCreated({
     const resend = new Resend(resendApiKey.value());
     
     // ✨ NEW: Check client status before sending proof notification
-    const clientDoc = await db.collection('users').doc(proof.clientId).get();
-    
-    if (!clientDoc.exists) {
-      console.log('⚠️ Client document not found, skipping client notification');
-    } else {
-      const clientData = clientDoc.data();
-      console.log(`📋 Client status: ${clientData.status} for ${clientData.email}`);
-      
-      // Only send separate proof notification if client is already active
-      if (clientData.status === 'active') {
-        const emailData = {
-          from: FROM_EMAIL,
-          to: proof.clientEmail,
-          subject: `🎨 New Proof Ready: ${proof.title}`,
-          html: getClientNotificationTemplate(proof)
-        };
-
-        // Try primary email first
-        try {
-          const result = await resend.emails.send(emailData);
-          console.log('✅ Client notification sent via Resend:', result.data?.id);
-          
-          // Update proof with notification status
-          await event.data.ref.update({
-            emailSent: true,
-            emailSentAt: new Date(),
-            emailProvider: 'resend',
-            resendId: result.data?.id
-          });
-        } catch (resendError) {
-          console.error('❌ Resend failed, trying Gmail fallback:', resendError);
-          
-          // Gmail fallback for M365 delivery issues
-          const gmailEmailData = {
-            ...emailData,
-            to: GMAIL_FALLBACK,
-            subject: `[CLIENT: ${proof.clientEmail}] ${emailData.subject}`,
-            html: `
-              <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
-                <strong>📧 Forward this to: ${proof.clientEmail}</strong><br>
-                <small>Original delivery failed - M365 blocking detected</small>
-              </div>
-              ${emailData.html}
-            `
-          };
-          
-          const fallbackResult = await resend.emails.send(gmailEmailData);
-          console.log('📨 Fallback notification sent to admin Gmail:', fallbackResult.data?.id);
-          
-          await event.data.ref.update({
-            emailSent: true,
-            emailSentAt: new Date(),
-            emailProvider: 'resend-fallback',
-            originalRecipient: proof.clientEmail,
-            fallbackRecipient: GMAIL_FALLBACK,
-            resendId: fallbackResult.data?.id
-          });
-        }
-      } else if (clientData.status === 'invited') {
-        console.log('🎯 Client recently invited - proof notification already included in invitation email');
+    let clientDoc = await db.collection('users').doc(proof.clientId).get();
         
-        // Mark as notified but via invitation
-        await event.data.ref.update({
-          emailSent: true,
-          emailSentAt: new Date(),
-          emailProvider: 'invitation-included',
-          notificationMethod: 'smart-invitation'
-        });
-      } else {
-        console.log(`⚠️ Client status "${clientData.status}" - skipping notification`);
-      }
+    // If not found in users, check invitations collection (pre-signup clients)
+    if (!clientDoc.exists) {
+    const invDoc = await db.collection('invitations').doc(proof.clientId).get();
+    if (invDoc.exists) {
+        clientDoc = invDoc;
+        console.log('📨 Client found in invitations collection (pending signup)');
+    } else {
+        console.log('⚠️ Client document not found in users or invitations, skipping client notification');
+    }
     }
 
     // ✅ ALWAYS notify admin regardless of client status

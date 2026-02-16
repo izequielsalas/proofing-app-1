@@ -1,4 +1,4 @@
-// src/components/uploadProof.jsx - DEBUG VERSION
+// src/components/uploadProof.jsx - UPDATED: Invitations go to 'invitations' collection
 import React, { useState, useRef, useEffect } from 'react';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -19,12 +19,11 @@ export default function UploadProof({ onUploadComplete }) {
   const [uploadProgress, setUploadProgress] = useState({});
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [invitingClient, setInvitingClient] = useState(false);
-  const [debugLog, setDebugLog] = useState([]); // Added debug logging
+  const [debugLog, setDebugLog] = useState([]);
   const fileInputRef = useRef();
   
   const { userProfile, isAdmin, isDesigner, canAssignProofs } = useAuth();
 
-  // Helper function to add debug messages
   const addDebugLog = (message, type = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = `[${timestamp}] ${message}`;
@@ -32,20 +31,50 @@ export default function UploadProof({ onUploadComplete }) {
     setDebugLog(prev => [...prev, { message: logEntry, type }]);
   };
 
-  // Fetch client list for admins and designers
+  // ⭐ UPDATED: Fetch clients from BOTH users and invitations collections
   useEffect(() => {
     if (canAssignProofs()) {
       const fetchClients = async () => {
         try {
-          addDebugLog('Fetching client list...');
-          const q = query(collection(db, 'users'), where('role', '==', 'client'));
-          const querySnapshot = await getDocs(q);
-          const clientsList = [];
-          querySnapshot.forEach((doc) => {
-            clientsList.push({ id: doc.id, ...doc.data() });
+          addDebugLog('Fetching client list from users + invitations...');
+
+          // Fetch active users (already signed up)
+          const usersQuery = query(
+            collection(db, 'users'),
+            where('role', '==', 'client')
+          );
+          const usersSnapshot = await getDocs(usersQuery);
+          const activeClients = usersSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          // Fetch pending invitations (not yet signed up)
+          const invitationsQuery = query(
+            collection(db, 'invitations'),
+            where('status', '==', 'pending')
+          );
+          const invitationsSnapshot = await getDocs(invitationsQuery);
+          const pendingClients = invitationsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            status: 'invited',  // Normalize status for display
+            _isInvitation: true
+          }));
+
+          // Combine and deduplicate by email
+          const allClients = [...activeClients];
+          pendingClients.forEach(inv => {
+            const alreadyActive = activeClients.find(
+              c => c.email?.toLowerCase() === inv.email?.toLowerCase()
+            );
+            if (!alreadyActive) {
+              allClients.push(inv);
+            }
           });
-          setClients(clientsList);
-          addDebugLog(`Found ${clientsList.length} clients`);
+
+          setClients(allClients);
+          addDebugLog(`Found ${activeClients.length} active + ${pendingClients.length} pending = ${allClients.length} total clients`);
         } catch (error) {
           console.error('Error fetching clients:', error);
           addDebugLog(`Error fetching clients: ${error.message}`, 'error');
@@ -55,14 +84,21 @@ export default function UploadProof({ onUploadComplete }) {
     }
   }, [canAssignProofs]);
 
-  // Create and invite a new client
+  // ⭐ UPDATED: Invite to 'invitations' collection instead of 'users'
   const handleInviteClient = async () => {
     if (!clientEmail.trim() || !clientName.trim()) {
       alert('Please enter both client name and email');
       return;
     }
 
-    // Check if client already exists
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(clientEmail)) {
+      alert('Please enter a valid email');
+      return;
+    }
+
+    // Check if client already exists in either collection
     const existingClient = clients.find(c => 
       c.email?.toLowerCase() === clientEmail.toLowerCase()
     );
@@ -80,48 +116,55 @@ export default function UploadProof({ onUploadComplete }) {
     addDebugLog(`Starting invitation process for ${clientEmail}`);
 
     try {
-      // Create client record with invited status
-      const clientData = {
+      // ⭐ NEW: Write to 'invitations' collection instead of 'users'
+      const invitationData = {
         email: clientEmail.trim().toLowerCase(),
         displayName: clientName.trim(),
-        role: 'client',
-        status: 'invited',
+        type: 'client_invitation',
+        status: 'pending',
         invitedAt: new Date(),
         invitedBy: auth.currentUser?.uid,
         inviterEmail: auth.currentUser?.email
       };
 
-      addDebugLog('Creating client record in Firestore...');
-      const clientRef = await addDoc(collection(db, 'users'), clientData);
-      addDebugLog(`✅ Client record created with ID: ${clientRef.id}`);
+      addDebugLog('Creating invitation in Firestore (invitations collection)...');
+      const invitationRef = await addDoc(collection(db, 'invitations'), invitationData);
+      addDebugLog(`✅ Invitation created with ID: ${invitationRef.id}`);
       
       // Send invitation email
       addDebugLog('🔄 Sending invitation email...');
       try {
-        const emailResult = await sendInvitationEmail(clientEmail, clientName, auth.currentUser?.email);
-        addDebugLog(`✅ Invitation email sent successfully! Result: ${JSON.stringify(emailResult)}`);
+        const emailResult = await sendInvitationEmail(
+          clientEmail, clientName, auth.currentUser?.email
+        );
+        addDebugLog(`✅ Invitation email sent!`);
       } catch (emailError) {
         addDebugLog(`❌ Invitation email failed: ${emailError.message}`, 'error');
-        console.error('Invitation email error:', emailError);
-        // Continue anyway - don't fail the entire process
+        // Continue — don't fail the whole process
       }
 
-      // Update local state
-      const newClient = { id: clientRef.id, ...clientData };
+      // ⭐ Use the invitation ID as the temporary clientId for proofs
+      // This will be transferred to the real Auth UID when they sign up
+      const newClient = { 
+        id: invitationRef.id,
+        ...invitationData,
+        status: 'invited',  // Normalize for display
+        _isInvitation: true
+      };
       setClients(prev => [...prev, newClient]);
-      setSelectedClientId(clientRef.id);
+      setSelectedClientId(invitationRef.id);
       
       // Clear form
       setClientEmail('');
       setClientName('');
       setShowInviteForm(false);
       
-      addDebugLog(`🎉 Client invitation process complete for ${clientName}`);
-      alert(`Invitation process complete for ${clientName}!`);
+      addDebugLog(`🎉 Client invitation complete for ${clientName}`);
+      alert(`Invitation sent to ${clientName}!`);
 
     } catch (error) {
       console.error('Error inviting client:', error);
-      addDebugLog(`❌ Error in invitation process: ${error.message}`, 'error');
+      addDebugLog(`❌ Error: ${error.message}`, 'error');
       alert('Failed to invite client. Please try again.');
     } finally {
       setInvitingClient(false);
@@ -143,7 +186,6 @@ export default function UploadProof({ onUploadComplete }) {
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
     
-    // Check file types (PDF or images only)
     const validFiles = selectedFiles.filter(file => {
       const isValid = file.type === 'application/pdf' || file.type.startsWith('image/');
       if (!isValid) {
@@ -152,9 +194,8 @@ export default function UploadProof({ onUploadComplete }) {
       return isValid;
     });
 
-    // Check file sizes (max 10MB)
     const validSizedFiles = validFiles.filter(file => {
-      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+      const isValidSize = file.size <= 10 * 1024 * 1024;
       if (!isValidSize) {
         alert(`${file.name} is too large. Please upload files smaller than 10MB.`);
       }
@@ -168,13 +209,12 @@ export default function UploadProof({ onUploadComplete }) {
     if (files.length === 0) return alert('Please select at least one file');
     if (!projectTitle.trim()) return alert('Please enter a project title');
     
-    // Enhanced validation for client assignment
     if (canAssignProofs() && !selectedClientId) {
       return alert('Please select a client or invite a new one');
     }
 
     setUploading(true);
-    setDebugLog([]); // Clear previous logs
+    setDebugLog([]);
     addDebugLog('🚀 Starting proof upload process...');
     
     const user = auth.currentUser;
@@ -182,7 +222,7 @@ export default function UploadProof({ onUploadComplete }) {
     try {
       const selectedClient = clients.find(c => c.id === selectedClientId);
       addDebugLog(`Selected client: ${selectedClient?.displayName} (${selectedClient?.email})`);
-      addDebugLog(`Client status: ${selectedClient?.status}`);
+      addDebugLog(`Client status: ${selectedClient?.status}${selectedClient?._isInvitation ? ' [from invitations collection]' : ''}`);
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -193,7 +233,6 @@ export default function UploadProof({ onUploadComplete }) {
           [i]: { status: 'uploading', progress: 0 }
         }));
         
-        // Upload file to storage
         const timestamp = Date.now();
         const fileName = `${timestamp}_${file.name}`;
         const fileRef = ref(storage, `proofFiles/${fileName}`);
@@ -203,6 +242,8 @@ export default function UploadProof({ onUploadComplete }) {
         addDebugLog(`✅ File uploaded to storage: ${fileName}`);
 
         // Create proof document
+        // ⭐ clientId will be the invitation doc ID for pending clients,
+        // or the Auth UID for active clients. AcceptInvitation handles the transfer.
         const proofData = {
           title: projectTitle.trim(),
           clientName: selectedClient?.displayName || selectedClient?.email,
@@ -232,7 +273,7 @@ export default function UploadProof({ onUploadComplete }) {
       }
 
       // Check if we need to send proof ready email for invited clients
-      if (selectedClient?.status === 'invited') {
+      if (selectedClient?.status === 'invited' || selectedClient?._isInvitation) {
         addDebugLog('🔄 Client is invited - sending proof ready notification...');
         try {
           const notificationResult = await sendProofReadyEmail(
@@ -266,7 +307,6 @@ export default function UploadProof({ onUploadComplete }) {
       addDebugLog(`❌ Upload failed: ${error.message}`, 'error');
       alert('Upload failed. Please try again.');
       
-      // Mark failed uploads
       files.forEach((_, i) => {
         if (!uploadProgress[i] || uploadProgress[i].status === 'uploading') {
           setUploadProgress(prev => ({
@@ -349,7 +389,7 @@ export default function UploadProof({ onUploadComplete }) {
             {clients.map(client => (
               <option key={client.id} value={client.id}>
                 {client.displayName || client.email}
-                {client.status === 'invited' && ' (Invited)'}
+                {(client.status === 'invited' || client._isInvitation) && ' (Invited)'}
               </option>
             ))}
           </select>

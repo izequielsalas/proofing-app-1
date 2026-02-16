@@ -1,5 +1,4 @@
-// 6. Enhanced Client Management Component
-// src/components/ClientManagement.jsx
+// src/components/ClientManagement.jsx - UPDATED: Reads from users + invitations collections
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -16,25 +15,45 @@ export default function ClientManagement() {
     fetchClients();
   }, []);
 
+  // ⭐ UPDATED: Fetch from BOTH users and invitations collections
   const fetchClients = async () => {
     try {
-      const q = query(collection(db, 'users'), where('role', '==', 'client'));
-      const snapshot = await getDocs(q);
-      const clientList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      // Active clients from users collection
+      const usersQ = query(collection(db, 'users'), where('role', '==', 'client'));
+      const usersSnap = await getDocs(usersQ);
+      const activeClients = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Pending invitations from invitations collection
+      const invQ = query(
+        collection(db, 'invitations'),
+        where('status', '==', 'pending')
+      );
+      const invSnap = await getDocs(invQ);
+      const pendingInvites = invSnap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        status: 'invited',  // Normalize for display/filtering
+        _isInvitation: true
       }));
-      
-      // Sort by status and then by name
-      clientList.sort((a, b) => {
+
+      // Combine, deduplicating by email
+      const combined = [...activeClients];
+      pendingInvites.forEach(inv => {
+        if (!activeClients.find(c => c.email?.toLowerCase() === inv.email?.toLowerCase())) {
+          combined.push(inv);
+        }
+      });
+
+      // Sort by status then name
+      combined.sort((a, b) => {
         if (a.status !== b.status) {
           const statusOrder = { active: 0, invited: 1, inactive: 2 };
-          return statusOrder[a.status] - statusOrder[b.status];
+          return (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3);
         }
-        return (a.displayName || a.email).localeCompare(b.displayName || b.email);
+        return (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '');
       });
-      
-      setClients(clientList);
+
+      setClients(combined);
     } catch (error) {
       console.error('Error fetching clients:', error);
     } finally {
@@ -53,6 +72,12 @@ export default function ClientManagement() {
   };
 
   const handleToggleStatus = async (client) => {
+    // Don't toggle invitations — they're in a different collection
+    if (client._isInvitation) {
+      alert('This client has not activated their account yet. You can resend the invitation.');
+      return;
+    }
+
     try {
       const newStatus = client.status === 'active' ? 'inactive' : 'active';
       await updateDoc(doc(db, 'users', client.id), {
@@ -75,7 +100,12 @@ export default function ClientManagement() {
     }
 
     try {
-      await deleteDoc(doc(db, 'users', client.id));
+      // Delete from the correct collection
+      if (client._isInvitation) {
+        await deleteDoc(doc(db, 'invitations', client.id));
+      } else {
+        await deleteDoc(doc(db, 'users', client.id));
+      }
       setClients(prev => prev.filter(c => c.id !== client.id));
       alert('Client deleted successfully');
     } catch (error) {
@@ -216,21 +246,31 @@ export default function ClientManagement() {
                           {client.displayName || 'No name provided'}
                         </div>
                         <div className="text-sm text-gray-500">{client.email}</div>
+                        {client._isInvitation && (
+                          <div className="text-xs text-blue-500 mt-0.5">📨 Pending invitation</div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(client.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {client.invitedAt ? new Date(client.invitedAt.seconds * 1000).toLocaleDateString() : '-'}
+                      {client.invitedAt 
+                        ? (client.invitedAt.seconds 
+                            ? new Date(client.invitedAt.seconds * 1000).toLocaleDateString()
+                            : new Date(client.invitedAt).toLocaleDateString())
+                        : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {client.activatedAt ? new Date(client.activatedAt.seconds * 1000).toLocaleDateString() : 
-                       client.status === 'invited' ? 'Not yet activated' : '-'}
+                      {client.activatedAt 
+                        ? (client.activatedAt.seconds
+                            ? new Date(client.activatedAt.seconds * 1000).toLocaleDateString()
+                            : new Date(client.activatedAt).toLocaleDateString())
+                        : client.status === 'invited' ? 'Not yet activated' : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end gap-2">
-                        {client.status === 'invited' && (
+                        {(client.status === 'invited' || client._isInvitation) && (
                           <button
                             onClick={() => handleResendInvitation(client)}
                             className="text-blue-600 hover:text-blue-900 text-sm"
@@ -240,7 +280,7 @@ export default function ClientManagement() {
                           </button>
                         )}
                         
-                        {client.status !== 'invited' && (
+                        {!client._isInvitation && client.status !== 'invited' && (
                           <button
                             onClick={() => handleToggleStatus(client)}
                             className={`text-sm ${
@@ -271,7 +311,7 @@ export default function ClientManagement() {
         )}
       </div>
 
-      {/* Bulk Actions (Future Enhancement) */}
+      {/* Quick Actions */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="text-sm font-medium text-blue-900 mb-2">Quick Actions</h3>
         <div className="flex flex-wrap gap-2">
@@ -298,23 +338,3 @@ export default function ClientManagement() {
     </div>
   );
 }
-
-// 7. Router Setup (App.jsx updates)
-/*
-Add this route to your router:
-
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import AcceptInvitation from './components/AcceptInvitation';
-
-function App() {
-  return (
-    <Router>
-      <Routes>
-        // ... your existing routes
-        <Route path="/accept-invitation" element={<AcceptInvitation />} />
-        // ... other routes
-      </Routes>
-    </Router>
-  );
-}
-*/

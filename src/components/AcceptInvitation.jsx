@@ -1,165 +1,157 @@
-// src/components/AcceptInvitation.jsx - MINIMAL FIX VERSION
-// Only change: Handle existing accounts properly
+// src/components/AcceptInvitation.jsx - UPDATED for invitations collection + race condition fix
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, updateDoc, collection, query, where, getDocs, setDoc, getDoc, arrayUnion } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { 
+  collection, query, where, getDocs, 
+  doc, setDoc, updateDoc, writeBatch 
+} from 'firebase/firestore';
 import { auth, db } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function AcceptInvitation() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+  const { setInvitationMode } = useAuth();
+
+  const [invitation, setInvitation] = useState(null);
   const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [invitation, setInvitation] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [debugLog, setDebugLog] = useState([]);
 
-  // Helper function to add debug messages
-  const addDebugLog = (message) => {
-    console.log('🔍 DEBUG:', message);
-    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  const addDebugLog = (msg) => {
+    console.log('🔍 DEBUG:', msg);
+    setDebugLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
   };
 
+  // Step 1: Find the invitation (check both collections)
   useEffect(() => {
-    const inviteEmail = searchParams.get('email');
-    if (inviteEmail) {
-      setEmail(inviteEmail);
-      fetchInvitation(inviteEmail);
-    } else {
-      setError('Invalid invitation link');
-    }
+    const fetchInvitation = async () => {
+      const emailParam = searchParams.get('email');
+      if (!emailParam) {
+        setError('No email provided in invitation link');
+        setLoading(false);
+        return;
+      }
+
+      setEmail(emailParam.toLowerCase());
+      addDebugLog(`Looking up invitation for: ${emailParam}`);
+
+      try {
+        // Check 'invitations' collection first (new system)
+        const invQuery = query(
+          collection(db, 'invitations'),
+          where('email', '==', emailParam.toLowerCase()),
+          where('status', '==', 'pending')
+        );
+        const invSnapshot = await getDocs(invQuery);
+
+        if (!invSnapshot.empty) {
+          const invDoc = invSnapshot.docs[0];
+          const invData = { id: invDoc.id, ...invDoc.data(), source: 'invitations' };
+          setInvitation(invData);
+          setDisplayName(invData.displayName || '');
+          addDebugLog(`✅ Found invitation (invitations collection): ${invDoc.id}`);
+          setLoading(false);
+          return;
+        }
+
+        // Fallback: check 'users' collection (legacy invitations)
+        const legacyQuery = query(
+          collection(db, 'users'),
+          where('email', '==', emailParam.toLowerCase()),
+          where('status', '==', 'invited')
+        );
+        const legacySnapshot = await getDocs(legacyQuery);
+
+        if (!legacySnapshot.empty) {
+          const legDoc = legacySnapshot.docs[0];
+          const legData = { id: legDoc.id, ...legDoc.data(), source: 'users' };
+          setInvitation(legData);
+          setDisplayName(legData.displayName || '');
+          addDebugLog(`✅ Found legacy invitation (users collection): ${legDoc.id}`);
+          setLoading(false);
+          return;
+        }
+
+        setError('Invitation not found or already used.');
+        addDebugLog('❌ No invitation found');
+      } catch (err) {
+        console.error('Error fetching invitation:', err);
+        setError('Error loading invitation');
+        addDebugLog(`❌ Error: ${err.message}`);
+      }
+      setLoading(false);
+    };
+
+    fetchInvitation();
   }, [searchParams]);
 
-  const fetchInvitation = async (email) => {
-    try {
-      addDebugLog(`Fetching invitation for email: ${email}`);
-      const q = query(
-        collection(db, 'users'), 
-        where('email', '==', email.toLowerCase()),
-        where('status', '==', 'invited')
-      );
-      const snapshot = await getDocs(q);
-      
-      if (!snapshot.empty) {
-        const inviteData = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
-        setInvitation(inviteData);
-        setDisplayName(inviteData.displayName || '');
-        addDebugLog(`Invitation found! ID: ${inviteData.id}`);
-      } else {
-        setError('Invitation not found or already used');
-        addDebugLog('No invitation found');
-      }
-    } catch (error) {
-      console.error('Error fetching invitation:', error);
-      setError('Error loading invitation');
-      addDebugLog(`Error fetching invitation: ${error.message}`);
-    }
-  };
-
-  // Enhanced proof transfer function
-  const transferProofOwnership = async (oldClientId, newUserUid) => {
-    try {
-      addDebugLog(`Calling Firebase Function to transfer proofs...`);
-      addDebugLog(`From: ${oldClientId} → To: ${newUserUid}`);
-      
-      const functions = getFunctions();
-      const transferFunction = httpsCallable(functions, 'transferProofOwnership');
-      
-      const result = await transferFunction({
-        oldClientId: oldClientId,
-        newUserUid: newUserUid
-      });
-      
-      addDebugLog(`✅ Function result: ${result.data.message}`);
-      addDebugLog(`Proofs transferred: ${result.data.proofsTransferred}`);
-      
-      return result.data;
-      
-    } catch (error) {
-      console.error('Error calling transfer function:', error);
-      addDebugLog(`❌ Function error: ${error.message}`);
-      throw error;
-    }
-  };
-
-  // FIXED: Handle existing accounts properly
+  // Step 2: Handle signup
   const handleAcceptInvitation = async (e) => {
     e.preventDefault();
-    
-    if (!invitation) {
-      setError('Invalid invitation');
-      return;
-    }
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
+    if (!invitation) { setError('Invalid invitation'); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
 
     setLoading(true);
     setError('');
     setDebugLog([]);
 
+    // ⭐ Tell AuthContext to stand down — we're handling profile creation
+    setInvitationMode(true);
+
     try {
       addDebugLog('🚀 Starting invitation acceptance...');
-      
-      let userCredential;
+
+      // ---- Create or sign into Firebase Auth ----
       let user;
-      
-      // Try to create account, handle existing account case
       try {
         addDebugLog('Creating Firebase Auth account...');
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        user = userCredential.user;
-        addDebugLog(`✅ Auth account created! UID: ${user.uid}`);
-      } catch (authError) {
-        if (authError.code === 'auth/email-already-in-use') {
-          addDebugLog('Account already exists, attempting to sign in...');
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        user = cred.user;
+        addDebugLog(`✅ Auth account created — UID: ${user.uid}`);
+      } catch (authErr) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          addDebugLog('Account exists, signing in...');
           try {
-            userCredential = await signInWithEmailAndPassword(auth, email, password);
-            user = userCredential.user;
-            addDebugLog(`✅ Signed into existing account! UID: ${user.uid}`);
-          } catch (signInError) {
-            addDebugLog(`❌ Sign in failed: ${signInError.message}`);
-            if (signInError.code === 'auth/wrong-password') {
-              throw new Error('An account with this email already exists but the password is incorrect. Please contact support.');
-            }
-            throw signInError;
+            const cred = await signInWithEmailAndPassword(auth, email, password);
+            user = cred.user;
+            addDebugLog(`✅ Signed in — UID: ${user.uid}`);
+          } catch (signInErr) {
+            throw new Error(
+              signInErr.code === 'auth/wrong-password'
+                ? 'Account exists but password is incorrect. Contact support.'
+                : signInErr.message
+            );
           }
         } else {
-          throw authError;
+          throw authErr;
         }
       }
 
-      // Create NEW user document with UID as document ID (Standard Pattern)
-      addDebugLog('Creating user profile with standard UID-as-document-ID pattern...');
-      const newUserData = {
+      // ---- Create user doc with Auth UID as doc ID ----
+      addDebugLog('Creating user profile (UID = doc ID)...');
+      const userData = {
         uid: user.uid,
         email: user.email,
         displayName: displayName.trim(),
         role: 'client',
         status: 'active',
         isActive: true,
-        clientId: user.uid,
+        clientId: user.uid,  // ⭐ This is the key — clientId === UID
         activatedAt: new Date(),
         emailVerified: user.emailVerified,
-        // Copy relevant data from invitation
-        invitedBy: invitation.invitedBy,
-        inviterEmail: invitation.inviterEmail,
-        invitedAt: invitation.invitedAt,
-        originalInvitationId: invitation.id, // Keep reference to original invitation
+        invitedBy: invitation.invitedBy || null,
+        inviterEmail: invitation.inviterEmail || null,
+        invitedAt: invitation.invitedAt || null,
+        originalInvitationId: invitation.id,
         permissions: {
           canViewAllProofs: false,
           canUploadProofs: false,
@@ -170,193 +162,188 @@ export default function AcceptInvitation() {
         updatedAt: new Date()
       };
 
-      // Create user document using UID as document ID
-      await setDoc(doc(db, 'users', user.uid), newUserData);
-      addDebugLog('✅ User profile created with standard UID-as-document-ID pattern');
+      await setDoc(doc(db, 'users', user.uid), userData);
+      addDebugLog('✅ User profile created');
 
-      // Transfer proofs from invitation ID to user UID
-      addDebugLog('Starting proof transfer via Firebase Function...');
-      try {
-        const transferResult = await transferProofOwnership(invitation.id, user.uid);
-        addDebugLog(`✅ Proof transfer complete: ${transferResult.proofsTransferred} proofs transferred`);
-      } catch (transferError) {
-        addDebugLog(`⚠️ Proof transfer failed: ${transferError.message}`);
-        addDebugLog('Account created successfully, but proof transfer failed. Contact admin if you don\'t see your proofs.');
+      // ---- Transfer proofs from invitation ID → Auth UID ----
+      addDebugLog(`Transferring proofs: ${invitation.id} → ${user.uid}`);
+
+      const proofsQuery = query(
+        collection(db, 'proofs'),
+        where('clientId', '==', invitation.id)
+      );
+      const proofsSnapshot = await getDocs(proofsQuery);
+
+      if (proofsSnapshot.empty) {
+        addDebugLog('ℹ️ No proofs to transfer (client may not have any yet)');
+      } else {
+        addDebugLog(`Found ${proofsSnapshot.size} proofs to transfer`);
+        const batch = writeBatch(db);
+
+        proofsSnapshot.docs.forEach(proofDoc => {
+          batch.update(doc(db, 'proofs', proofDoc.id), {
+            clientId: user.uid,
+            transferredAt: new Date(),
+            originalInvitationId: invitation.id
+          });
+        });
+
+        await batch.commit();
+        addDebugLog(`✅ ${proofsSnapshot.size} proofs transferred`);
       }
 
-      // Mark original invitation as processed (keep for audit trail)
-      addDebugLog('Marking original invitation as processed...');
+      // ---- Mark invitation as completed ----
+      addDebugLog('Marking invitation as completed...');
       try {
-        await updateDoc(doc(db, 'users', invitation.id), {
-          status: 'processed',
-          processedAt: new Date(),
-          processedByUid: user.uid,
-          newUserDocumentId: user.uid,
-          note: 'Invitation processed - user created with UID as document ID'
-        });
-        addDebugLog('✅ Original invitation marked as processed');
-      } catch (updateError) {
-        addDebugLog(`⚠️ Could not update original invitation: ${updateError.message}`);
-        // Non-critical error, don't fail the process
+        if (invitation.source === 'invitations') {
+          await updateDoc(doc(db, 'invitations', invitation.id), {
+            status: 'completed',
+            completedAt: new Date(),
+            userUid: user.uid
+          });
+        } else {
+          // Legacy: mark old users-collection invitation
+          await updateDoc(doc(db, 'users', invitation.id), {
+            status: 'processed',
+            processedAt: new Date(),
+            processedByUid: user.uid,
+            newUserDocumentId: user.uid,
+            note: 'Invitation processed - user created with UID as document ID'
+          });
+        }
+        addDebugLog('✅ Invitation marked as completed');
+      } catch (markErr) {
+        addDebugLog(`⚠️ Could not update invitation status: ${markErr.message}`);
       }
 
       addDebugLog('🎉 Account activation complete!');
-      
-      // Redirect after showing debug info
+
+      // ⭐ Done — AuthContext can resume normal operation
+      setInvitationMode(false);
+
+      // Small delay to let AuthContext pick up the new profile
       setTimeout(() => {
-        navigate('/dashboard', { 
-          state: { 
-            message: 'Welcome! Your account has been activated. You can now review your proofs.' 
+        navigate('/dashboard', {
+          state: {
+            message: 'Welcome! Your account has been activated. You can now review your proofs.'
           }
         });
-      }, 3000);
+      }, 1500);
 
-    } catch (error) {
-      console.error('Error accepting invitation:', error);
-      addDebugLog(`❌ Error: ${error.message}`);
-      
-      // More specific error handling
-      if (error.message.includes('password is incorrect')) {
-        setError(error.message);
-      } else if (error.code === 'auth/weak-password') {
-        setError('Password is too weak. Please choose a stronger password.');
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Invalid email address format.');
-      } else {
-        setError('Failed to activate account. Please try again or contact support.');
-      }
-    } finally {
+    } catch (err) {
+      console.error('Invitation acceptance error:', err);
+      setInvitationMode(false); // ⭐ Reset on error too
+      setError(err.message);
+      addDebugLog(`❌ Error: ${err.message}`);
       setLoading(false);
     }
   };
 
-  if (error && !invitation) {
+  // ---- Render ----
+  if (loading && !invitation) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div className="text-center">
-            <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-              Invalid Invitation
-            </h2>
-            <p className="mt-2 text-sm text-red-600">{error}</p>
-            <p className="mt-4 text-sm text-gray-600">
-              Please contact Cesar Graphics for a new invitation.
-            </p>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Loading invitation...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            Accept Your Invitation
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Create your account to access the proofing portal
-          </p>
-          
-          {/* Debug info in development */}
-          {process.env.NODE_ENV === 'development' && invitation && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-left">
-              <p className="text-xs text-blue-800">
-                <strong>Debug Info:</strong><br/>
-                <strong>Invitation ID:</strong> {invitation.id}<br/>
-                <strong>Implementation:</strong> Standard UID Pattern
-              </p>
-            </div>
-          )}
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+        <h2 className="text-2xl font-bold text-center mb-6">
+          Welcome to Cesar Graphics
+        </h2>
 
-        <form className="mt-8 space-y-6" onSubmit={handleAcceptInvitation}>
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-md p-4">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
+        {/* Debug Panel */}
+        {debugLog.length > 0 && (
+          <div className="mb-4 p-3 bg-gray-100 rounded text-xs max-h-48 overflow-y-auto">
+            <strong>Debug Log:</strong>
+            {debugLog.map((log, i) => (
+              <div key={i} className={
+                log.includes('❌') ? 'text-red-600' :
+                log.includes('✅') ? 'text-green-600' :
+                log.includes('⚠️') ? 'text-yellow-600' : 'text-gray-700'
+              }>
+                {log}
+              </div>
+            ))}
+          </div>
+        )}
 
-          <div className="space-y-4">
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+
+        {invitation ? (
+          <form onSubmit={handleAcceptInvitation} className="space-y-4">
+            <p className="text-gray-600 text-center mb-4">
+              You've been invited to the proofing portal.
+              Create your account to view your proofs.
+            </p>
+
             <div>
-              <label htmlFor="displayName" className="block text-sm font-medium text-gray-700">
-                Your Name
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Email</label>
               <input
-                id="displayName"
+                type="email"
+                value={email}
+                disabled
+                className="mt-1 block w-full rounded-md border-gray-300 bg-gray-100 px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Display Name</label>
+              <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm px-3 py-2"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email Address
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Password</label>
               <input
-                id="email"
-                type="email"
-                value={email}
-                disabled
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm px-3 py-2"
               />
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
-              </label>
+              <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
               <input
-                id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm px-3 py-2"
               />
             </div>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-          >
-            {loading ? 'Creating Account...' : 'Activate Account'}
-          </button>
-        </form>
-
-        {/* Debug Log */}
-        {process.env.NODE_ENV === 'development' && debugLog.length > 0 && (
-          <div className="mt-6 p-4 bg-gray-100 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Debug Log:</h3>
-            <div className="text-xs space-y-1 max-h-40 overflow-y-auto">
-              {debugLog.map((log, index) => (
-                <div key={index} className="text-gray-600">
-                  {log}
-                </div>
-              ))}
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'Creating Account...' : 'Create Account'}
+            </button>
+          </form>
+        ) : (
+          <div className="text-center">
+            <p className="text-gray-600">
+              {error || 'Invitation not found.'}
+            </p>
+            <p className="mt-4 text-sm text-gray-500">
+              Please contact Cesar Graphics for a new invitation.
+            </p>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
-// src/contexts/AuthContext.jsx - FIXED VERSION
+// src/contexts/AuthContext.jsx - UPDATED with invitation mode race condition fix
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, query, where, collection, getDocs, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -17,15 +17,54 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [firestoreError, setFirestoreError] = useState(null);
 
+  // ⭐ RACE CONDITION FIX: Track when AcceptInvitation is handling signup
+  const invitationModeRef = useRef(false);
+
+  const setInvitationMode = (val) => {
+    invitationModeRef.current = val;
+    console.log(`🔒 Invitation mode: ${val ? 'ON' : 'OFF'}`);
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      if (user) {
-        await findAndSetUserProfile(user);
-      } else {
+
+      if (!user) {
         setUserProfile(null);
         setLoading(false);
+        return;
       }
+
+      // ⭐ RACE CONDITION FIX: If AcceptInvitation is handling signup,
+      // don't auto-create a profile — let AcceptInvitation finish first
+      if (invitationModeRef.current) {
+        console.log('⏳ Invitation mode active — skipping auto-profile creation');
+        // Wait for AcceptInvitation to create the profile, then pick it up
+        const checkForProfile = async (retries = 5) => {
+          for (let i = 0; i < retries; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            try {
+              const userDoc = await getDoc(doc(db, 'users', user.uid));
+              if (userDoc.exists()) {
+                console.log('✅ Profile found (created by AcceptInvitation)');
+                setUserProfile({ id: userDoc.id, ...userDoc.data() });
+                setLoading(false);
+                return;
+              }
+            } catch (err) {
+              console.warn('Retry check failed:', err.message);
+            }
+          }
+          // If still no profile after retries, create a fallback
+          console.warn('⚠️ Profile not found after waiting — creating fallback');
+          await createUserProfile(user);
+        };
+        checkForProfile();
+        return;
+      }
+
+      // Normal flow: find existing profile
+      await findAndSetUserProfile(user);
     });
 
     return unsubscribe;
@@ -35,93 +74,69 @@ export function AuthProvider({ children }) {
     try {
       setLoading(true);
       setFirestoreError(null);
-      
+
       console.log('Looking for user profile for:', user.email);
-      
-      // First, try to find user by UID (standard pattern)
+
+      // Fast path: check by UID (standard case)
       const userDocRef = doc(db, 'users', user.uid);
       const userDocSnap = await getDoc(userDocRef);
-      
+
       if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
         console.log('✅ Found user profile by UID');
-        setUserProfile(userData);
+        setUserProfile({ id: userDocSnap.id, ...userDocSnap.data() });
         setLoading(false);
         return;
       }
-      
+
       console.log('No profile found by UID, searching by email...');
-      
-      // Search by email for any existing records
+
+      // Fallback: search by email for edge cases
       const emailQuery = query(
         collection(db, 'users'),
         where('email', '==', user.email.toLowerCase())
       );
       const emailSnapshot = await getDocs(emailQuery);
-      
+
       if (!emailSnapshot.empty) {
-        // Found existing profile(s) by email
-        console.log(`Found ${emailSnapshot.docs.length} profile(s) by email`);
-        
-        // Look for an active client profile first
-        const activeProfile = emailSnapshot.docs.find(doc => {
-          const data = doc.data();
-          return data.role === 'client' && data.status === 'active' && data.uid;
-        });
-        
-        if (activeProfile) {
-          console.log('✅ Found active client profile, using it');
-          setUserProfile(activeProfile.data());
-          setLoading(false);
-          return;
-        }
-        
-        // Look for invitation records that need to be upgraded
-        const invitationProfile = emailSnapshot.docs.find(doc => {
-          const data = doc.data();
-          return data.status === 'invited' && !data.uid;
-        });
-        
-        if (invitationProfile) {
-          console.log('🔄 Found invitation profile, upgrading to full user...');
-          await upgradeInvitationToUser(user, invitationProfile);
-          return;
-        }
+        const existingProfile = emailSnapshot.docs[0];
+        console.log('✅ Found profile by email');
+        setUserProfile({ id: existingProfile.id, ...existingProfile.data() });
+        setLoading(false);
+        return;
       }
-      
+
       // Check for pending invitations in invitations collection
+      // (handles case where user signs in normally but has a pending invitation)
       const invitationsQuery = query(
         collection(db, 'invitations'),
         where('email', '==', user.email.toLowerCase()),
         where('status', '==', 'pending')
       );
       const invitationsSnapshot = await getDocs(invitationsQuery);
-      
+
       if (!invitationsSnapshot.empty) {
         console.log('🔄 Found pending invitation, upgrading...');
         const invitation = invitationsSnapshot.docs[0];
         await upgradeInvitationToUser(user, invitation);
         return;
       }
-      
-      // No existing records found, create new user profile
+
+      // No profile at all — create one (normal signup, not invitation)
       console.log('No existing records found, creating new profile');
       await createUserProfile(user);
-      
+
     } catch (error) {
       console.error('Error finding user profile:', error);
       setFirestoreError(error.message);
-      
+
       // Create fallback profile to prevent app from breaking
       const fallbackProfile = {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName || user.email,
         role: 'client',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        isActive: true,
         clientId: user.uid,
+        isActive: true,
         permissions: {
           canViewAllProofs: false,
           canUploadProofs: false,
@@ -139,7 +154,7 @@ export function AuthProvider({ children }) {
     try {
       const invitationData = invitationDoc.data();
       console.log('Upgrading invitation to full user account...');
-      
+
       // Create full user profile with UID as document ID
       const userData = {
         uid: user.uid,
@@ -148,7 +163,7 @@ export function AuthProvider({ children }) {
         role: 'client',
         status: 'active',
         isActive: true,
-        clientId: user.uid,
+        clientId: user.uid, // ⭐ clientId === UID
         activatedAt: new Date(),
         emailVerified: user.emailVerified,
         permissions: {
@@ -167,6 +182,7 @@ export function AuthProvider({ children }) {
         userData.inviterEmail = invitationData.inviterEmail;
         userData.invitedAt = invitationData.invitedAt;
       }
+      userData.originalInvitationId = invitationDoc.id;
 
       // Create user document with UID as document ID
       await setDoc(doc(db, 'users', user.uid), userData);
@@ -177,7 +193,7 @@ export function AuthProvider({ children }) {
 
       // Mark invitation as completed
       if (invitationData.type === 'client_invitation') {
-        // New invitation system
+        // New invitations collection
         await updateDoc(doc(db, 'invitations', invitationDoc.id), {
           status: 'completed',
           completedAt: new Date(),
@@ -185,18 +201,22 @@ export function AuthProvider({ children }) {
         });
       } else {
         // Legacy invitation in users collection
-        await updateDoc(doc(db, 'users', invitationDoc.id), {
-          status: 'processed',
-          processedAt: new Date(),
-          processedByUid: user.uid
-        });
+        try {
+          await updateDoc(doc(db, 'users', invitationDoc.id), {
+            status: 'processed',
+            processedAt: new Date(),
+            processedByUid: user.uid
+          });
+        } catch (legacyErr) {
+          console.warn('Could not update legacy invitation:', legacyErr.message);
+        }
       }
 
       setUserProfile(userData);
       setLoading(false);
-      
+
       console.log('🎉 Successfully upgraded invitation to user account');
-      
+
     } catch (error) {
       console.error('Error upgrading invitation:', error);
       throw error;
@@ -206,22 +226,20 @@ export function AuthProvider({ children }) {
   const transferProofsFromInvitation = async (invitationId, userUid) => {
     try {
       console.log(`Transferring proofs from ${invitationId} to ${userUid}`);
-      
-      // Find proofs assigned to the invitation
+
       const proofsQuery = query(
         collection(db, 'proofs'),
         where('clientId', '==', invitationId)
       );
       const proofsSnapshot = await getDocs(proofsQuery);
-      
+
       if (proofsSnapshot.empty) {
         console.log('No proofs found to transfer');
         return;
       }
 
       console.log(`Found ${proofsSnapshot.docs.length} proofs to transfer`);
-      
-      // Update each proof to point to the user's UID
+
       const updatePromises = proofsSnapshot.docs.map(proofDoc => {
         return updateDoc(doc(db, 'proofs', proofDoc.id), {
           clientId: userUid,
@@ -229,26 +247,26 @@ export function AuthProvider({ children }) {
           originalInvitationId: invitationId
         });
       });
-      
+
       await Promise.all(updatePromises);
       console.log(`✅ Successfully transferred ${proofsSnapshot.docs.length} proofs`);
-      
+
     } catch (error) {
       console.error('Error transferring proofs:', error);
-      // Don't throw - this shouldn't prevent account creation
+      // Don't throw — this shouldn't prevent account creation
     }
   };
 
   const createUserProfile = async (user) => {
     console.log('Creating new user profile for:', user.email);
-    
-    // Create new profile (normal signup flow)
+
     const userRef = doc(db, 'users', user.uid);
     const defaultProfile = {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName || user.email,
       role: 'client',
+      status: 'active',
       createdAt: new Date(),
       updatedAt: new Date(),
       isActive: true,
@@ -260,7 +278,7 @@ export function AuthProvider({ children }) {
         canManageUsers: false
       }
     };
-    
+
     try {
       await setDoc(userRef, defaultProfile);
       setUserProfile(defaultProfile);
@@ -268,7 +286,6 @@ export function AuthProvider({ children }) {
       console.log('✅ New user profile created successfully');
     } catch (error) {
       console.error('Error creating user profile:', error);
-      // Set profile in memory even if Firestore write fails
       setUserProfile(defaultProfile);
       setLoading(false);
     }
@@ -278,9 +295,8 @@ export function AuthProvider({ children }) {
   const isAdmin = () => userProfile?.role === 'admin';
   const isClient = () => userProfile?.role === 'client';
   const isDesigner = () => userProfile?.role === 'designer';
-  
+
   const hasPermission = (permission) => {
-    // Special handling for upload permissions - both admins and designers can upload
     if (permission === 'canUploadProofs') {
       return isAdmin() || isDesigner();
     }
@@ -298,7 +314,6 @@ export function AuthProvider({ children }) {
     return isAdmin() || isDesigner();
   };
 
-  // Refresh user profile (useful after invitation acceptance)
   const refreshUserProfile = async () => {
     if (currentUser) {
       setLoading(true);
@@ -317,7 +332,8 @@ export function AuthProvider({ children }) {
     canAssignProofs,
     loading,
     firestoreError,
-    refreshUserProfile
+    refreshUserProfile,
+    setInvitationMode  // ⭐ Exposed for AcceptInvitation to use
   };
 
   return (
