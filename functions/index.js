@@ -1394,18 +1394,61 @@ exports.handleNewProof = onDocumentCreated({
   try {
     const resend = new Resend(resendApiKey.value());
     
-    // ✨ NEW: Check client status before sending proof notification
+    // Check client status before sending proof notification
     let clientDoc = await db.collection('users').doc(proof.clientId).get();
-        
+    
     // If not found in users, check invitations collection (pre-signup clients)
     if (!clientDoc.exists) {
-    const invDoc = await db.collection('invitations').doc(proof.clientId).get();
-    if (invDoc.exists) {
+      const invDoc = await db.collection('invitations').doc(proof.clientId).get();
+      if (invDoc.exists) {
         clientDoc = invDoc;
         console.log('📨 Client found in invitations collection (pending signup)');
-    } else {
+      } else {
         console.log('⚠️ Client document not found in users or invitations, skipping client notification');
+      }
     }
+
+    // Send client notification based on status
+    if (clientDoc.exists) {
+      const clientData = clientDoc.data();
+      console.log(`📋 Client status: ${clientData.status} for ${clientData.email}`);
+
+      if (clientData.status === 'active') {
+        // Active client — send proof notification
+        const emailData = {
+          from: FROM_EMAIL,
+          to: proof.clientEmail,
+          subject: `🎨 New Proof Ready: ${proof.title}`,
+          html: getClientNotificationTemplate({ ...proof, loginUrl: FRONTEND_URL + '/auth' })
+        };
+
+        try {
+          const result = await resend.emails.send(emailData);
+          console.log('✅ Client notification sent via Resend:', result.data?.id);
+          
+          await event.data.ref.update({
+            emailSent: true,
+            emailSentAt: new Date(),
+            emailProvider: 'resend',
+            resendId: result.data?.id
+          });
+        } catch (resendError) {
+          console.error('❌ Resend failed:', resendError);
+        }
+
+      } else if (clientData.status === 'invited' || clientData.status === 'pending') {
+        // Invited/pending client — proof info is included in invitation email
+        console.log('🎯 Client is invited/pending - proof notification included in invitation email');
+        
+        await event.data.ref.update({
+          emailSent: true,
+          emailSentAt: new Date(),
+          emailProvider: 'invitation-included',
+          notificationMethod: 'smart-invitation'
+        });
+      } else {
+        console.log(`⚠️ Client status "${clientData.status}" - skipping notification`);
+      }
     }
 
     // ✅ ALWAYS notify admin regardless of client status
@@ -1421,7 +1464,7 @@ exports.handleNewProof = onDocumentCreated({
         <p><strong>Uploaded by:</strong> ${proof.uploaderEmail}</p>
         <p><strong>File:</strong> ${proof.fileName}</p>
         <p><strong>View:</strong> <a href="${FRONTEND_URL}/proof/${proofId}">Review Proof</a></p>
-        ${clientDoc.exists && clientDoc.data().status === 'invited' ? 
+        ${clientDoc.exists && (clientDoc.data().status === 'invited' || clientDoc.data().status === 'pending') ? 
           '<p><strong>📧 Note:</strong> Client notification included in invitation email</p>' : 
           ''}
       `

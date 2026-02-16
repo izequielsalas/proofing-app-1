@@ -165,31 +165,20 @@ export default function AcceptInvitation() {
       await setDoc(doc(db, 'users', user.uid), userData);
       addDebugLog('✅ User profile created');
 
-      // ---- Transfer proofs from invitation ID → Auth UID ----
+      // ---- Transfer proofs via Cloud Function (has admin privileges) ----
       addDebugLog(`Transferring proofs: ${invitation.id} → ${user.uid}`);
-
-      const proofsQuery = query(
-        collection(db, 'proofs'),
-        where('clientId', '==', invitation.id)
-      );
-      const proofsSnapshot = await getDocs(proofsQuery);
-
-      if (proofsSnapshot.empty) {
-        addDebugLog('ℹ️ No proofs to transfer (client may not have any yet)');
-      } else {
-        addDebugLog(`Found ${proofsSnapshot.size} proofs to transfer`);
-        const batch = writeBatch(db);
-
-        proofsSnapshot.docs.forEach(proofDoc => {
-          batch.update(doc(db, 'proofs', proofDoc.id), {
-            clientId: user.uid,
-            transferredAt: new Date(),
-            originalInvitationId: invitation.id
-          });
+      try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const functions = getFunctions();
+        const transferFunction = httpsCallable(functions, 'transferProofOwnership');
+        const result = await transferFunction({
+          oldClientId: invitation.id,
+          newUserUid: user.uid
         });
-
-        await batch.commit();
-        addDebugLog(`✅ ${proofsSnapshot.size} proofs transferred`);
+        addDebugLog(`✅ ${result.data.proofsTransferred} proofs transferred`);
+      } catch (transferErr) {
+        addDebugLog(`⚠️ Proof transfer failed: ${transferErr.message}`);
+        addDebugLog('Contact admin if you don\'t see your proofs.');
       }
 
       // ---- Mark invitation as completed ----
