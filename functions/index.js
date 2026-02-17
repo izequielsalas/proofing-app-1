@@ -986,6 +986,79 @@ const getClientNotificationTemplate = (data) => {
 </html>`;
 };
 
+// Production status notification email template
+const getProductionStatusTemplate = (data) => {
+  const statusConfig = {
+    in_production: {
+      emoji: '🏭',
+      tagline: 'Your Order Is In Production',
+      heading: 'Great news — your order is being made!',
+      message: `Your approved proof <strong>"${data.title}"</strong> has been sent to production. Our team is working on it now.`,
+      color: '#00A7E1',
+    },
+    completed: {
+      emoji: '✅',
+      tagline: 'Your Order Is Complete!',
+      heading: 'Your order is ready!',
+      message: `Your order <strong>"${data.title}"</strong> has passed quality control and is complete. We'll be in touch shortly about pickup or delivery.`,
+      color: '#28a745',
+    },
+  };
+
+  const config = statusConfig[data.status] || statusConfig['in_production'];
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${config.tagline} - Cesar Graphics</title>
+    <style>
+        body { margin: 0; padding: 0; background: linear-gradient(135deg, #002856 0%, #003d73 100%); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,40,86,0.25); }
+        .header { background: linear-gradient(135deg, #002856 0%, #003d73 100%); padding: 40px; text-align: center; position: relative; }
+        .brand-stripe { height: 4px; background: linear-gradient(90deg, #002856 0%, #00A7E1 50%, #BBBBBB 100%); position: absolute; top: 0; left: 0; right: 0; }
+        .logo { color: #ffffff; font-size: 32px; font-weight: 700; margin: 0 0 8px 0; }
+        .tagline { color: rgba(255,255,255,0.9); font-size: 18px; margin: 0; }
+        .content { padding: 40px; }
+        .status-card { background: #f8f9fa; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 32px; border-left: 4px solid ${config.color}; }
+        .status-icon { font-size: 48px; margin-bottom: 16px; }
+        .status-heading { color: #002856; font-size: 22px; font-weight: 600; margin: 0 0 12px 0; }
+        .status-message { color: #444444; font-size: 16px; line-height: 1.6; margin: 0; }
+        .button { display: inline-block; background: linear-gradient(135deg, #002856 0%, #003d73 100%); color: #ffffff !important; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; margin-top: 24px; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e9ecef; }
+        .footer p { color: #666666; font-size: 12px; margin: 0; }
+    </style>
+</head>
+<body>
+    <div style="padding: 40px 20px;">
+        <div class="container">
+            <div class="header">
+                <div class="brand-stripe"></div>
+                <h1 class="logo">CESAR GRAPHICS</h1>
+                <p class="tagline">${config.tagline}</p>
+            </div>
+            <div class="content">
+                <div class="status-card">
+                    <div class="status-icon">${config.emoji}</div>
+                    <h2 class="status-heading">Hi ${data.clientName}! ${config.heading}</h2>
+                    <p class="status-message">${config.message}</p>
+                    <a href="${data.loginUrl || 'https://proofingapp1.web.app/auth'}" class="button">View Your Order</a>
+                </div>
+                <p style="color:#666666; font-size:14px; text-align:center;">
+                    Questions? Just reply to this email — we're happy to help.<br>
+                    <strong>The Cesar Graphics Team</strong>
+                </p>
+            </div>
+            <div class="footer">
+                <p>You're receiving this because you have an active project with Cesar Graphics.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+};
+
 // ✨ ENHANCED: Resend Email Function with Better Configuration
 const sendEmailWithResend = async (resend, emailData) => {
   try {
@@ -1487,39 +1560,75 @@ exports.handleProofStatusChange = onDocumentUpdated({
   const afterData = event.data.after.data();
   const proofId = event.params.proofId;
 
-  // Check if status changed
+  // Check if status actually changed
   if (beforeData.status === afterData.status) {
-    return; // No status change
+    return;
   }
 
   console.log(`📝 Proof status changed: ${beforeData.status} → ${afterData.status} for ${afterData.title}`);
 
   try {
     const resend = new Resend(resendApiKey.value());
-    
-    // Notify admin of status changes
+
     const statusEmoji = {
       pending: '⏳',
-      approved: '✅', 
-      declined: '❌'
+      approved: '✅',
+      declined: '❌',
+      in_production: '🏭',
+      in_quality_control: '🔬',
+      completed: '📦',
     };
 
+    const statusLabel = {
+      pending: 'Pending',
+      approved: 'Approved',
+      declined: 'Declined',
+      in_production: 'In Production',
+      in_quality_control: 'In Quality Control',
+      completed: 'Completed',
+    };
+
+    // --- Admin notification (always sent for every status change) ---
     const adminEmailData = {
       from: FROM_EMAIL,
       to: ADMIN_EMAIL,
-      subject: `${statusEmoji[afterData.status]} Proof ${afterData.status.toUpperCase()}: ${afterData.title}`,
+      subject: `${statusEmoji[afterData.status] || '📋'} Proof ${statusLabel[afterData.status] || afterData.status}: ${afterData.title}`,
       html: `
         <h2>Proof Status Update</h2>
         <p><strong>Project:</strong> ${afterData.title}</p>
         <p><strong>Client:</strong> ${afterData.clientName}</p>
-        <p><strong>Status:</strong> ${beforeData.status} → <strong>${afterData.status.toUpperCase()}</strong></p>
-        ${afterData.clientFeedback ? `<p><strong>Client Feedback:</strong> ${afterData.clientFeedback}</p>` : ''}
-        <p><strong>View:</strong> <a href="${FRONTEND_URL}/proof/${proofId}">Review Proof</a></p>
+        <p><strong>Status:</strong> ${statusLabel[beforeData.status] || beforeData.status} → <strong>${statusLabel[afterData.status] || afterData.status}</strong></p>
+        ${afterData.comments ? `<p><strong>Comments:</strong> ${afterData.comments}</p>` : ''}
+        <p><strong>View:</strong> <a href="${FRONTEND_URL}">Open Dashboard</a></p>
       `
     };
 
     await resend.emails.send(adminEmailData);
     console.log('✅ Admin status notification sent');
+
+    // --- Client notifications for production statuses ---
+    // Send on: in_production, completed
+    // Skip on: in_quality_control (internal step)
+    const clientNotifyStatuses = ['in_production', 'completed'];
+
+    if (clientNotifyStatuses.includes(afterData.status) && afterData.clientEmail) {
+      const clientEmailData = {
+        from: FROM_EMAIL,
+        to: afterData.clientEmail,
+        subject: `${statusEmoji[afterData.status]} ${statusLabel[afterData.status]}: ${afterData.title}`,
+        html: getProductionStatusTemplate({
+          clientName: afterData.clientName || 'there',
+          title: afterData.title,
+          status: afterData.status,
+          loginUrl: FRONTEND_URL + '/auth',
+        }),
+      };
+
+      await resend.emails.send(clientEmailData);
+      console.log(`✅ Client notified of ${afterData.status} status`);
+    } else if (afterData.status === 'in_quality_control') {
+      console.log('ℹ️ Skipping client email for in_quality_control (internal step)');
+    }
 
   } catch (error) {
     console.error('❌ Error in handleProofStatusChange:', error);

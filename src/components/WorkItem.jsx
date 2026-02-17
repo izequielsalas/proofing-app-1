@@ -1,6 +1,6 @@
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { FileText, User, Calendar, Clock, GitBranch } from "lucide-react";
+import { FileText, User, Calendar, Clock, GitBranch, Factory, FlaskConical, PackageCheck } from "lucide-react";
 
 export default function WorkItem({ title, fileUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId }) {
   const cardRef = useRef(null);
@@ -16,7 +16,7 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
     const y = e.clientY - rect.top;
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-    const rotateMax = 8; // Reduced for subtler effect
+    const rotateMax = 8;
     
     const deltaX = ((x - centerX) / centerX) * rotateMax;
     const deltaY = ((y - centerY) / centerY) * rotateMax * -1;
@@ -34,11 +34,15 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
 
   const isPDF = fileUrl?.endsWith(".pdf");
   const isRevision = parentProofId != null;
+  const isInProduction = ['in_production', 'in_quality_control', 'completed'].includes(status);
   
   const getStatusColor = () => {
     switch (status) {
       case 'approved': return 'bg-green-100 text-green-800';
       case 'declined': return 'bg-red-100 text-red-800';
+      case 'in_production': return 'bg-blue-100 text-blue-800';
+      case 'in_quality_control': return 'bg-purple-100 text-purple-800';
+      case 'completed': return 'bg-emerald-100 text-emerald-800';
       default: return 'bg-amber-100 text-amber-800';
     }
   };
@@ -47,7 +51,19 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
     switch (status) {
       case 'approved': return 'Approved';
       case 'declined': return 'Declined';
+      case 'in_production': return 'In Production';
+      case 'in_quality_control': return 'In QC';
+      case 'completed': return 'Completed';
       default: return 'Pending Review';
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (status) {
+      case 'in_production': return <Factory className="w-3 h-3" />;
+      case 'in_quality_control': return <FlaskConical className="w-3 h-3" />;
+      case 'completed': return <PackageCheck className="w-3 h-3" />;
+      default: return null;
     }
   };
 
@@ -112,7 +128,7 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
 
         {/* Status Badge */}
         <div className="absolute top-3 right-3 flex gap-2">
-          {/* Revision Badge - Only show if this is a revision */}
+          {/* Revision Badge */}
           {isRevision && revisionNumber > 1 && (
             <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex items-center gap-1">
               <GitBranch className="w-3 h-3" />
@@ -121,7 +137,8 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
           )}
           
           {/* Status Badge */}
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor()}`}>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor()}`}>
+            {getStatusIcon()}
             {getStatusText()}
           </span>
         </div>
@@ -156,12 +173,30 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
         <div className="mt-4 pt-3 border-t border-gray-100">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-500">
-              Click to {status === 'pending' ? 'review' : 'view details'}
+              {status === 'pending' ? 'Click to review' : 'Click to view details'}
             </span>
             {status === 'pending' && (
               <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3 text-amber-500" />
                 <span className="text-xs text-amber-600 font-medium">Needs Review</span>
+              </div>
+            )}
+            {status === 'in_production' && (
+              <div className="flex items-center gap-1">
+                <Factory className="w-3 h-3 text-blue-500" />
+                <span className="text-xs text-blue-600 font-medium">In Production</span>
+              </div>
+            )}
+            {status === 'in_quality_control' && (
+              <div className="flex items-center gap-1">
+                <FlaskConical className="w-3 h-3 text-purple-500" />
+                <span className="text-xs text-purple-600 font-medium">Quality Control</span>
+              </div>
+            )}
+            {status === 'completed' && (
+              <div className="flex items-center gap-1">
+                <PackageCheck className="w-3 h-3 text-emerald-500" />
+                <span className="text-xs text-emerald-600 font-medium">Completed</span>
               </div>
             )}
           </div>

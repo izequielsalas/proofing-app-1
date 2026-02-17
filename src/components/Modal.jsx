@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
-import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck } from "lucide-react";
 import UploadProof from "./uploadProof";
 
 export default function Modal({ project, onClose }) {
@@ -14,6 +14,7 @@ export default function Modal({ project, onClose }) {
   
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [notes, setNotes] = useState("");
+  const [declineError, setDeclineError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showUploadRevision, setShowUploadRevision] = useState(false);
   const [revisionHistory, setRevisionHistory] = useState([]);
@@ -35,7 +36,6 @@ export default function Modal({ project, onClose }) {
   const loadRevisionHistory = async () => {
     setLoadingHistory(true);
     try {
-      // Query all proofs in this revision chain
       const q = query(
         collection(db, "proofs"),
         where("revisionChainId", "==", revisionChainId),
@@ -45,7 +45,7 @@ export default function Modal({ project, onClose }) {
       const snapshot = await getDocs(q);
       const history = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(proof => proof.id !== project.id); // Exclude current proof
+        .filter(proof => proof.id !== project.id);
       
       setRevisionHistory(history);
     } catch (error) {
@@ -73,11 +73,19 @@ export default function Modal({ project, onClose }) {
   };
 
   const handleDecline = async () => {
+    // Step 1: show the comment box if not already visible
     if (!showCommentBox) {
       setShowCommentBox(true);
       return;
     }
-    
+
+    // Step 2: enforce that a comment was actually entered
+    if (notes.trim() === "") {
+      setDeclineError("Please explain why you're declining before submitting.");
+      return;
+    }
+
+    setDeclineError("");
     setIsLoading(true);
     try {
       await updateDoc(doc(db, "proofs", project.id), {
@@ -94,11 +102,45 @@ export default function Modal({ project, onClose }) {
     }
   };
 
+  // Production status advance handlers
+  const handleAdvanceStatus = async (newStatus) => {
+    setIsLoading(true);
+    try {
+      await updateDoc(doc(db, "proofs", project.id), {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+      onClose();
+    } catch (err) {
+      console.error(`Error advancing proof to ${newStatus}:`, err);
+      alert(`Error updating proof status. Please try again.`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Clear error when user starts typing
+  const handleNotesChange = (e) => {
+    setNotes(e.target.value);
+    if (declineError) setDeclineError("");
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'approved': return 'text-green-600 bg-green-50 border-green-200';
       case 'declined': return 'text-red-600 bg-red-50 border-red-200';
+      case 'in_production': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'in_quality_control': return 'text-purple-600 bg-purple-50 border-purple-200';
+      case 'completed': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
       default: return 'text-amber-600 bg-amber-50 border-amber-200';
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'in_production': return 'In Production';
+      case 'in_quality_control': return 'In Quality Control';
+      default: return status?.charAt(0).toUpperCase() + status?.slice(1);
     }
   };
 
@@ -128,15 +170,15 @@ export default function Modal({ project, onClose }) {
       transition={{ duration: 0.3 }}
     >
       <motion.div
-        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
         onClick={stopPropagation}
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center rounded-t-xl z-10">
+        {/* Header — fixed, never scrolls */}
+        <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-center rounded-t-xl flex-shrink-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold text-gray-900">
               {project.title || `Proof #${project.id?.slice(-6)}`}
@@ -152,20 +194,21 @@ export default function Modal({ project, onClose }) {
             
             {/* Status Badge */}
             <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(project.status)}`}>
-              {project.status?.charAt(0).toUpperCase() + project.status?.slice(1)}
+              {getStatusLabel(project.status)}
             </span>
           </div>
           <button
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
             onClick={onClose}
           >
             <X size={24} className="text-gray-500" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
-          {/* Revision History Toggle - Only show if there are other versions */}
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto p-6">
+
+          {/* Revision History Toggle */}
           {(isRevision || revisionHistory.length > 0 || loadingHistory) && (
             <div className="mb-6">
               <button
@@ -177,7 +220,6 @@ export default function Modal({ project, onClose }) {
                 {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
-              {/* Revision History List */}
               {showHistory && (
                 <div className="mt-4 space-y-2">
                   {loadingHistory ? (
@@ -227,14 +269,14 @@ export default function Modal({ project, onClose }) {
             {isPDF ? (
               <iframe
                 src={project.fileUrl}
-                className="w-full h-[600px] rounded-lg border shadow-sm"
+                className="w-full h-[500px] rounded-lg border shadow-sm"
                 title={`proof-${project.id}`}
               />
             ) : (
               <img
                 src={project.fileUrl}
                 alt={project.title || "Proof"}
-                className="w-full max-h-[600px] object-contain rounded-lg border shadow-sm"
+                className="w-full max-h-[500px] object-contain rounded-lg border shadow-sm"
               />
             )}
           </div>
@@ -244,9 +286,7 @@ export default function Modal({ project, onClose }) {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="font-medium text-gray-600">Created:</span>
-                <p className="text-gray-900">
-                  {formatDate(project.createdAt)}
-                </p>
+                <p className="text-gray-900">{formatDate(project.createdAt)}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-600">Type:</span>
@@ -279,16 +319,29 @@ export default function Modal({ project, onClose }) {
           {(showCommentBox || project.comments || project.notes) && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Comments {project.status === 'pending' && '(optional)'}
+                {showCommentBox && project.status === 'pending'
+                  ? 'Reason for declining (required)'
+                  : 'Comments'}
               </label>
               {project.status === 'pending' ? (
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add comments, change requests, or approval notes..."
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                  rows={4}
-                />
+                <div>
+                  <textarea
+                    value={notes}
+                    onChange={handleNotesChange}
+                    placeholder="Describe what needs to be changed..."
+                    className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
+                      declineError ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                    }`}
+                    rows={4}
+                    autoFocus={showCommentBox}
+                  />
+                  {declineError && (
+                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      {declineError}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-gray-900">
@@ -299,7 +352,40 @@ export default function Modal({ project, onClose }) {
             </div>
           )}
 
-          {/* Upload Revision Section - Only for declined proofs and users with upload permissions */}
+          {/* Production Status Banner — shown for in_production, in_quality_control, completed */}
+          {['in_production', 'in_quality_control', 'completed'].includes(project.status) && (
+            <div className={`mb-6 p-4 rounded-lg border ${
+              project.status === 'completed'
+                ? 'bg-emerald-50 border-emerald-200'
+                : project.status === 'in_quality_control'
+                ? 'bg-purple-50 border-purple-200'
+                : 'bg-blue-50 border-blue-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                {project.status === 'in_production' && <Factory className="w-5 h-5 text-blue-600" />}
+                {project.status === 'in_quality_control' && <FlaskConical className="w-5 h-5 text-purple-600" />}
+                {project.status === 'completed' && <PackageCheck className="w-5 h-5 text-emerald-600" />}
+                <div>
+                  <p className={`font-medium text-sm ${
+                    project.status === 'completed' ? 'text-emerald-900'
+                    : project.status === 'in_quality_control' ? 'text-purple-900'
+                    : 'text-blue-900'
+                  }`}>
+                    {project.status === 'in_production' && 'This proof is currently in production'}
+                    {project.status === 'in_quality_control' && 'This proof is in quality control'}
+                    {project.status === 'completed' && 'This proof has been completed'}
+                  </p>
+                  {project.updatedAt && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Updated {formatDate(project.updatedAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Upload Revision Section */}
           {project.status === 'declined' && hasPermission('canUploadProofs') && (
             <div className="mb-6">
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
@@ -324,7 +410,6 @@ export default function Modal({ project, onClose }) {
                 </button>
               </div>
 
-              {/* Revision Upload Form */}
               {showUploadRevision && (
                 <div className="border-t border-gray-200 pt-6">
                   <UploadProof 
@@ -339,42 +424,80 @@ export default function Modal({ project, onClose }) {
               )}
             </div>
           )}
+        </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <a
-              href={project.fileUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-            >
-              <Download size={16} />
-              Download
-            </a>
-            
-            {project.status === 'pending' && (
-              <>
+        {/* Actions — fixed at bottom, never scrolls */}
+        <div className="border-t border-gray-200 p-6 flex gap-3 rounded-b-xl bg-white flex-shrink-0 flex-wrap">
+          <a
+            href={project.fileUrl}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+          >
+            <Download size={16} />
+            Download
+          </a>
+          
+          {project.status === 'pending' && (
+            <>
+              <button
+                onClick={handleApprove}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Check size={16} />
+                {isLoading ? 'Approving...' : 'Approve'}
+              </button>
+              
+              <button
+                onClick={handleDecline}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              >
+                <AlertCircle size={16} />
+                {isLoading ? 'Processing...' : (showCommentBox ? 'Submit Decline' : 'Decline')}
+              </button>
+            </>
+          )}
+
+          {/* Production workflow buttons — admin and designer only */}
+          {hasPermission('canUploadProofs') && (
+            <>
+              {project.status === 'approved' && (
                 <button
-                  onClick={handleApprove}
+                  onClick={() => handleAdvanceStatus('in_production')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  <Check size={16} />
-                  {isLoading ? 'Approving...' : 'Approve'}
+                  <Factory size={16} />
+                  {isLoading ? 'Updating...' : 'Send to Production'}
                 </button>
-                
+              )}
+
+              {project.status === 'in_production' && (
                 <button
-                  onClick={handleDecline}
+                  onClick={() => handleAdvanceStatus('in_quality_control')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  <AlertCircle size={16} />
-                  {isLoading ? 'Processing...' : (showCommentBox ? 'Submit Decline' : 'Decline')}
+                  <FlaskConical size={16} />
+                  {isLoading ? 'Updating...' : 'Move to QC'}
                 </button>
-              </>
-            )}
-          </div>
+              )}
+
+              {project.status === 'in_quality_control' && (
+                <button
+                  onClick={() => handleAdvanceStatus('completed')}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <PackageCheck size={16} />
+                  {isLoading ? 'Updating...' : 'Mark Completed'}
+                </button>
+              )}
+            </>
+          )}
         </div>
       </motion.div>
     </motion.div>
