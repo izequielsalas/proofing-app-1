@@ -53,8 +53,6 @@ export default function ProofGrid({ proofs = [] }) {
                 status={proof.status}
                 clientName={proof.clientName}
                 createdAt={proof.createdAt}
-                revisionNumber={proof.revisionNumber || 1}
-                parentProofId={proof.parentProofId}
               />
             </div>
           </AnimatedGridItem>

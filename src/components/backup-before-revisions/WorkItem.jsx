@@ -1,8 +1,8 @@
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { FileText, User, Calendar, Clock, GitBranch } from "lucide-react";
+import { FileText, User, Calendar, Clock } from "lucide-react";
 
-export default function WorkItem({ title, fileUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId }) {
+export default function WorkItem({ title, fileUrl, status = 'pending', clientName, createdAt }) {
   const cardRef = useRef(null);
   const rotateX = useMotionValue(0);
   const rotateY = useMotionValue(0);
@@ -33,7 +33,6 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
   };
 
   const isPDF = fileUrl?.endsWith(".pdf");
-  const isRevision = parentProofId != null;
   
   const getStatusColor = () => {
     switch (status) {
@@ -111,16 +110,7 @@ export default function WorkItem({ title, fileUrl, status = 'pending', clientNam
         </div>
 
         {/* Status Badge */}
-        <div className="absolute top-3 right-3 flex gap-2">
-          {/* Revision Badge - Only show if this is a revision */}
-          {isRevision && revisionNumber > 1 && (
-            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 flex items-center gap-1">
-              <GitBranch className="w-3 h-3" />
-              v{revisionNumber}
-            </span>
-          )}
-          
-          {/* Status Badge */}
+        <div className="absolute top-3 right-3">
           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor()}`}>
             {getStatusText()}
           </span>
