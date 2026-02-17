@@ -26,6 +26,15 @@ export default function Modal({ project, onClose }) {
   const isRevision = project.parentProofId != null;
   const currentRevisionNumber = project.revisionNumber || 1;
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
   // Load revision history when modal opens or when history is toggled
   useEffect(() => {
     if (showHistory && !loadingHistory && revisionHistory.length === 0) {
@@ -162,7 +171,7 @@ export default function Modal({ project, onClose }) {
 
   return (
     <motion.div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-hidden"
       onClick={onClose}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
