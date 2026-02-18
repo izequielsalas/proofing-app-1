@@ -1,5 +1,5 @@
 // src/components/dashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { Link } from 'react-router-dom';
@@ -9,14 +9,47 @@ import ProofGrid from './ProofGrid';
 import UploadProof from './uploadProof';
 import { Search, Filter, Upload, Users, LogOut, ArrowUpDown } from 'lucide-react';
 
-const calcStats = (data) => data.reduce((acc, proof) => {
-  acc.total++;
-  acc[proof.status] = (acc[proof.status] || 0) + 1;
-  return acc;
-}, { pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 });
+// ─── Chain helpers ────────────────────────────────────────────────────────────
+// Groups a flat proof list into revision chains and returns one representative
+// object per job (the latest revision in each chain).
+function buildChains(proofs) {
+  const chainMap = new Map();
+
+  proofs.forEach((proof) => {
+    const key = proof.revisionChainId || proof.id;
+    if (!chainMap.has(key)) chainMap.set(key, []);
+    chainMap.get(key).push(proof);
+  });
+
+  // Sort each group newest-first so index 0 is always the latest revision
+  chainMap.forEach((group) => {
+    group.sort((a, b) => {
+      const aRev = a.revisionNumber ?? 0;
+      const bRev = b.revisionNumber ?? 0;
+      if (bRev !== aRev) return bRev - aRev;
+      const aTime = a.createdAt?.toDate?.() ?? new Date(0);
+      const bTime = b.createdAt?.toDate?.() ?? new Date(0);
+      return bTime - aTime;
+    });
+  });
+
+  return Array.from(chainMap.values());
+}
+
+// Stats count chains, not raw docs. Each chain's status = latest revision's status.
+const calcStats = (chains) =>
+  chains.reduce(
+    (acc, group) => {
+      const latest = group[0];
+      acc.total++;
+      acc[latest.status] = (acc[latest.status] || 0) + 1;
+      return acc;
+    },
+    { pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 }
+  );
 
 export default function Dashboard() {
-  const [proofs, setProofs] = useState([]);
+  const [proofs, setProofs] = useState([]);   // raw flat list from Firestore
   const [filter, setFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +60,7 @@ export default function Dashboard() {
   const [uploadedProofs, setUploadedProofs] = useState([]);
   const [assignedProofs, setAssignedProofs] = useState([]);
 
+  // ─── Firestore listeners (unchanged) ────────────────────────────────────────
   useEffect(() => {
     if (!currentUser || !userProfile) return;
 
@@ -35,17 +69,16 @@ export default function Dashboard() {
       const unsub = onSnapshot(q, (snapshot) => {
         const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
         setProofs(data);
-        setStats(calcStats(data));
       });
       return unsub;
 
     } else if (isClient()) {
       const q = query(collection(db, 'proofs'), where('clientId', '==', userProfile.clientId || userProfile.uid));
       const unsub = onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }))
+        const data = snapshot.docs
+          .map((doc) => ({ ...doc.data(), id: doc.id }))
           .sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
         setProofs(data);
-        setStats(calcStats(data));
       });
       return unsub;
 
@@ -61,15 +94,16 @@ export default function Dashboard() {
         setAssignedProofs(snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
       });
       unsubscribers.push(unsubAssigned);
-      return () => unsubscribers.forEach(unsub => unsub());
+      return () => unsubscribers.forEach((unsub) => unsub());
     }
   }, [currentUser, userProfile, isAdmin, isClient, isDesigner]);
 
+  // ─── Combine designer proofs (unchanged) ────────────────────────────────────
   useEffect(() => {
     if (!isDesigner()) return;
     const combined = [...uploadedProofs];
-    assignedProofs.forEach(proof => {
-      if (!combined.find(p => p.id === proof.id)) combined.push(proof);
+    assignedProofs.forEach((proof) => {
+      if (!combined.find((p) => p.id === proof.id)) combined.push(proof);
     });
     combined.sort((a, b) => {
       const aTime = a.createdAt?.toDate?.() || new Date(0);
@@ -77,24 +111,57 @@ export default function Dashboard() {
       return bTime - aTime;
     });
     setProofs(combined);
-    setStats(calcStats(combined));
   }, [uploadedProofs, assignedProofs, isDesigner]);
 
-  const filteredProofs = proofs
-    .filter(proof => {
-      const matchesFilter = filter === 'all' || proof.status === filter;
-      const matchesSearch = searchTerm === '' ||
-        proof.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (proof.title && proof.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (proof.clientName && proof.clientName.toLowerCase().includes(searchTerm.toLowerCase()));
-      return matchesFilter && matchesSearch;
-    })
-    .sort((a, b) => {
-      const aTime = a.createdAt?.toDate?.() || new Date(0);
-      const bTime = b.createdAt?.toDate?.() || new Date(0);
-      return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
-    });
+  // ─── Chain-aware derived state ───────────────────────────────────────────────
+  // All chains — recalculated only when raw proofs change
+  const allChains = useMemo(() => buildChains(proofs), [proofs]);
 
+  // Stats count chains, not raw docs
+  useEffect(() => {
+    setStats(calcStats(allChains));
+  }, [allChains]);
+
+  // Filtered chains — status filter matches latest revision; search matches ANY
+  // revision in the chain (title, clientName, or id)
+  const filteredChains = useMemo(() => {
+    return allChains
+      .filter((group) => {
+        const latest = group[0];
+
+        // Status: match against the latest revision's status
+        const matchesFilter = filter === 'all' || latest.status === filter;
+
+        // Search: match against any revision in the chain
+        const matchesSearch =
+          searchTerm === '' ||
+          group.some((proof) => {
+            const term = searchTerm.toLowerCase();
+            return (
+              proof.id.toLowerCase().includes(term) ||
+              proof.title?.toLowerCase().includes(term) ||
+              proof.clientName?.toLowerCase().includes(term)
+            );
+          });
+
+        return matchesFilter && matchesSearch;
+      })
+      .sort((a, b) => {
+        // Sort by the latest revision's createdAt
+        const aTime = a[0].createdAt?.toDate?.() || new Date(0);
+        const bTime = b[0].createdAt?.toDate?.() || new Date(0);
+        return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+      });
+  }, [allChains, filter, searchTerm, sortOrder]);
+
+  // Flatten back to a raw proof list for ProofGrid — it does its own grouping
+  // internally, so we just need all the relevant docs in there.
+  const filteredProofs = useMemo(
+    () => filteredChains.flat(),
+    [filteredChains]
+  );
+
+  // ─── Handlers ───────────────────────────────────────────────────────────────
   const handleLogout = async () => {
     try { await signOut(auth); } catch (error) { console.error('Error signing out:', error); }
   };
@@ -134,7 +201,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cesar-navy mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
@@ -174,34 +241,33 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        {/* Stats Cards — clickable filters, 7 across on large screens */}
+        {/* Stats Cards — counts are now per-job, not per-revision */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
-          {/* Total card — clears filter */}
           <div
             onClick={() => setFilter('all')}
             className={`rounded-lg shadow px-4 py-5 text-left w-full transition-all duration-200 border-2 cursor-pointer select-none ${
-              filter === 'all' ? 'border-blue-500 shadow-md bg-gray-50' : 'bg-white border-transparent hover:shadow-md hover:border-gray-200'
+              filter === 'all' ? 'border-cesar-navy shadow-md bg-gray-50' : 'bg-white border-transparent hover:shadow-md hover:border-gray-200'
             }`}
           >
             <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <div className="w-4 h-4 bg-blue-600 rounded"></div>
+              <div className="p-2 bg-[#E0EAF5] rounded-lg">
+                <div className="w-4 h-4 bg-cesar-navy rounded"></div>
               </div>
               <div className="ml-4">
                 <p className="text-xs font-medium text-gray-600 whitespace-nowrap">
-                  {isAdmin() ? 'Total Proofs' : 'Your Proofs'}
+                  {isAdmin() ? 'Total Jobs' : 'Your Jobs'}
                 </p>
                 <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
               </div>
             </div>
           </div>
 
-          <StatCard label="Pending"       value={stats.pending}            filterKey="pending"            iconColor="bg-amber-600"   bgColor="bg-amber-100"   borderColor="border-amber-500" />
-          <StatCard label="Approved"      value={stats.approved}           filterKey="approved"           iconColor="bg-green-600"   bgColor="bg-green-100"   borderColor="border-green-500" />
-          <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-red-600"     bgColor="bg-red-100"     borderColor="border-red-500" />
-          <StatCard label="In Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-blue-500"    bgColor="bg-blue-100"    borderColor="border-blue-500" />
-          <StatCard label="In QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-purple-600"  bgColor="bg-purple-100"  borderColor="border-purple-500" />
-          <StatCard label="Completed"     value={stats.completed}          filterKey="completed"          iconColor="bg-emerald-600" bgColor="bg-emerald-100" borderColor="border-emerald-500" />
+          <StatCard label="Pending"       value={stats.pending}            filterKey="pending"            iconColor="bg-cesar-yellow"   bgColor="bg-[#FEF3CD]"   borderColor="border-cesar-yellow" />
+          <StatCard label="Approved"      value={stats.approved}           filterKey="approved"           iconColor="bg-cesar-green"    bgColor="bg-[#E6F9DD]"   borderColor="border-cesar-green" />
+          <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-cesar-magenta"  bgColor="bg-[#FCE4EC]"   borderColor="border-cesar-magenta" />
+          <StatCard label="In Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
+          <StatCard label="In QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
+          <StatCard label="Completed"     value={stats.completed}          filterKey="completed"          iconColor="bg-cesar-navy"     bgColor="bg-[#E0EAF5]"   borderColor="border-cesar-navy" />
         </div>
 
         {/* Controls */}
@@ -212,10 +278,10 @@ export default function Dashboard() {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
-                  placeholder="Search proofs..."
+                  placeholder="Search jobs..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -223,7 +289,7 @@ export default function Dashboard() {
                 <select
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
                 >
                   <option value="all">All Status</option>
                   <option value="pending">Pending</option>
@@ -239,7 +305,7 @@ export default function Dashboard() {
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
                 >
                   <option value="desc">Newest First</option>
                   <option value="asc">Oldest First</option>
@@ -264,24 +330,25 @@ export default function Dashboard() {
         </div>
 
         {isClient() && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-blue-800 text-sm">
+          <div className="bg-[#E0EAF5] border border-cesar-navy/20 rounded-lg p-4 mb-6">
+            <p className="text-cesar-navy text-sm">
               <strong>Client View:</strong> You can only see proofs assigned to you. Click on any proof to approve, decline, or add comments.
             </p>
           </div>
         )}
 
         {isDesigner() && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
-            <p className="text-purple-800 text-sm">
+          <div className="bg-[#EDE7F6] border border-cesar-purple/20 rounded-lg p-4 mb-6">
+            <p className="text-[#5A3695] text-sm">
               <strong>Designer View:</strong> You can see proofs assigned to you and upload new proofs for client approval.
             </p>
           </div>
         )}
 
+        {/* Results count — jobs language, not proofs */}
         <div className="mb-4">
           <p className="text-sm text-gray-600">
-            Showing {filteredProofs.length} of {stats.total} proofs
+            Showing {filteredChains.length} of {stats.total} {stats.total === 1 ? 'job' : 'jobs'}
             {filter !== 'all' && ` (filtered by ${filter.replace(/_/g, ' ')})`}
             {searchTerm && ` (searched for "${searchTerm}")`}
           </p>

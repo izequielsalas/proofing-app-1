@@ -1,13 +1,25 @@
 @import "tailwindcss";
 
-/* Cesar Graphics Color Palette */
+@theme {
+  --color-cesar-navy: #002855;
+  --color-cesar-white: #FFFFFF;
+  --color-cesar-green: #78D64B;
+  --color-cesar-cyan: #00FFFF;
+  --color-cesar-magenta: #E4007C;
+  --color-cesar-yellow: #FDB813;
+  --color-cesar-gray: #BBBBBB;
+  --color-cesar-purple: #7E57C2;
+  --color-cesar-orange: #FF6800;
+}
+
+/* Cesar Graphics - Official Color Palette */
 :root {
-  --cesar-primary: #1e3a8a;     /* Deep blue */
-  --cesar-secondary: #3b82f6;   /* Bright blue */
-  --cesar-accent: #f59e0b;      /* Orange/amber accent */
-  --cesar-success: #10b981;     /* Green for approvals */
-  --cesar-warning: #f59e0b;     /* Amber for pending */
-  --cesar-danger: #ef4444;      /* Red for declined */
+  --cesar-primary: #002855;     /* Navy — Pantone 295C */
+  --cesar-secondary: #003d73;   /* Lighter navy for hover/gradients */
+  --cesar-accent: #FDB813;      /* Yellow — Pantone 1235C */
+  --cesar-success: #78D64B;     /* Green — approved status */
+  --cesar-warning: #FDB813;     /* Yellow — pending status */
+  --cesar-danger: #E4007C;      /* Magenta — Pantone 213C, declined status */
   --cesar-dark: #1f2937;        /* Dark gray */
   --cesar-light: #f9fafb;       /* Light gray background */
   --cesar-white: #ffffff;
@@ -94,8 +106,8 @@ button:disabled {
 }
 
 .btn-success:hover {
-  background-color: #059669;
-  border-color: #059669;
+  background-color: #66c23a;
+  border-color: #66c23a;
 }
 
 /* Danger button styling */
@@ -106,8 +118,8 @@ button:disabled {
 }
 
 .btn-danger:hover {
-  background-color: #dc2626;
-  border-color: #dc2626;
+  background-color: #c9006a;
+  border-color: #c9006a;
 }
 
 /* Input styling */
@@ -155,21 +167,21 @@ button:disabled {
 
 /* Status indicators */
 .status-pending {
-  background-color: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background-color: #FEF3CD;
+  color: #92690B;
+  border: 1px solid #FDB813;
 }
 
 .status-approved {
-  background-color: #d1fae5;
-  color: #065f46;
-  border: 1px solid #6ee7b7;
+  background-color: #E6F9DD;
+  color: #2D7A0F;
+  border: 1px solid #78D64B;
 }
 
 .status-declined {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fca5a5;
+  background-color: #FCE4EC;
+  color: #A8005A;
+  border: 1px solid #E4007C;
 }
 
 /* Animation classes */
@@ -356,8 +368,8 @@ button:not([class*="btn-"]):not(.unstyled):hover {
 }
 
 .btn-success:hover {
-  background-color: #059669;
-  border-color: #059669;
+  background-color: #66c23a;
+  border-color: #66c23a;
 }
 
 /* DANGER BUTTONS - Decline/Delete actions */
@@ -368,8 +380,8 @@ button:not([class*="btn-"]):not(.unstyled):hover {
 }
 
 .btn-danger:hover {
-  background-color: #dc2626;
-  border-color: #dc2626;
+  background-color: #c9006a;
+  border-color: #c9006a;
 }
 
 /* GHOST BUTTONS - Subtle actions */
@@ -425,9 +437,4 @@ button:not([class*="btn-"]):not(.unstyled):hover {
   border-top-color: currentColor;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }

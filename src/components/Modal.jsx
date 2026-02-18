@@ -136,12 +136,12 @@ export default function Modal({ project, onClose }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'approved': return 'text-green-600 bg-green-50 border-green-200';
-      case 'declined': return 'text-red-600 bg-red-50 border-red-200';
-      case 'in_production': return 'text-blue-600 bg-blue-50 border-blue-200';
-      case 'in_quality_control': return 'text-purple-600 bg-purple-50 border-purple-200';
-      case 'completed': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-      default: return 'text-amber-600 bg-amber-50 border-amber-200';
+      case 'approved': return 'text-[#2D7A0F] bg-[#E6F9DD] border-cesar-green';
+      case 'declined': return 'text-[#A8005A] bg-[#FCE4EC] border-cesar-magenta';
+      case 'in_production': return 'text-[#B34D00] bg-[#FFF0E0] border-cesar-orange';
+      case 'in_quality_control': return 'text-[#5A3695] bg-[#EDE7F6] border-cesar-purple';
+      case 'completed': return 'text-cesar-navy bg-[#E0EAF5] border-cesar-navy';
+      default: return 'text-[#92690B] bg-[#FEF3CD] border-cesar-yellow';
     }
   };
 
@@ -195,7 +195,7 @@ export default function Modal({ project, onClose }) {
             
             {/* Revision Badge */}
             {isRevision && (
-              <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#E0EAF5] text-cesar-navy border border-cesar-navy/30 flex items-center gap-1">
                 <GitBranch className="w-4 h-4" />
                 Revision {currentRevisionNumber}
               </span>
@@ -222,7 +222,7 @@ export default function Modal({ project, onClose }) {
             <div className="mb-6">
               <button
                 onClick={() => setShowHistory(!showHistory)}
-                className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                className="flex items-center gap-2 text-sm font-medium text-cesar-navy hover:text-[#003d73] transition-colors"
               >
                 <GitBranch className="w-4 h-4" />
                 {showHistory ? 'Hide' : 'Show'} Revision History
@@ -338,14 +338,14 @@ export default function Modal({ project, onClose }) {
                     value={notes}
                     onChange={handleNotesChange}
                     placeholder="Describe what needs to be changed..."
-                    className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none ${
-                      declineError ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                    className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy resize-none ${
+                      declineError ? 'border-cesar-magenta bg-[#FCE4EC]' : 'border-gray-300'
                     }`}
                     rows={4}
                     autoFocus={showCommentBox}
                   />
                   {declineError && (
-                    <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                    <p className="mt-2 text-sm text-[#A8005A] flex items-center gap-1">
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
                       {declineError}
                     </p>
@@ -365,20 +365,20 @@ export default function Modal({ project, onClose }) {
           {['in_production', 'in_quality_control', 'completed'].includes(project.status) && (
             <div className={`mb-6 p-4 rounded-lg border ${
               project.status === 'completed'
-                ? 'bg-emerald-50 border-emerald-200'
+                ? 'bg-[#E0EAF5] border-cesar-navy/20'
                 : project.status === 'in_quality_control'
-                ? 'bg-purple-50 border-purple-200'
-                : 'bg-blue-50 border-blue-200'
+                ? 'bg-[#EDE7F6] border-cesar-purple/20'
+                : 'bg-[#FFF0E0] border-cesar-orange/20'
             }`}>
               <div className="flex items-center gap-3">
-                {project.status === 'in_production' && <Factory className="w-5 h-5 text-blue-600" />}
-                {project.status === 'in_quality_control' && <FlaskConical className="w-5 h-5 text-purple-600" />}
-                {project.status === 'completed' && <PackageCheck className="w-5 h-5 text-emerald-600" />}
+                {project.status === 'in_production' && <Factory className="w-5 h-5 text-cesar-orange" />}
+                {project.status === 'in_quality_control' && <FlaskConical className="w-5 h-5 text-cesar-purple" />}
+                {project.status === 'completed' && <PackageCheck className="w-5 h-5 text-cesar-navy" />}
                 <div>
                   <p className={`font-medium text-sm ${
-                    project.status === 'completed' ? 'text-emerald-900'
-                    : project.status === 'in_quality_control' ? 'text-purple-900'
-                    : 'text-blue-900'
+                    project.status === 'completed' ? 'text-cesar-navy'
+                    : project.status === 'in_quality_control' ? 'text-[#5A3695]'
+                    : 'text-[#B34D00]'
                   }`}>
                     {project.status === 'in_production' && 'This proof is currently in production'}
                     {project.status === 'in_quality_control' && 'This proof is in quality control'}
@@ -397,14 +397,14 @@ export default function Modal({ project, onClose }) {
           {/* Upload Revision Section */}
           {project.status === 'declined' && hasPermission('canUploadProofs') && (
             <div className="mb-6">
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+              <div className="p-4 bg-[#FEF3CD] border border-cesar-yellow/30 rounded-lg mb-4">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h4 className="font-medium text-amber-900 flex items-center gap-2">
+                    <h4 className="font-medium text-[#92690B] flex items-center gap-2">
                       <AlertCircle className="w-5 h-5" />
                       This proof was declined
                     </h4>
-                    <p className="text-sm text-amber-800 mt-1">
+                    <p className="text-sm text-[#92690B] mt-1">
                       Upload a revised version to continue the approval process
                     </p>
                   </div>
@@ -412,7 +412,7 @@ export default function Modal({ project, onClose }) {
                 
                 <button
                   onClick={() => setShowUploadRevision(!showUploadRevision)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors text-sm font-medium"
                 >
                   <Upload className="w-4 h-4" />
                   {showUploadRevision ? 'Cancel Upload' : 'Upload Revision'}
@@ -453,7 +453,7 @@ export default function Modal({ project, onClose }) {
               <button
                 onClick={handleApprove}
                 disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 <Check size={16} />
                 {isLoading ? 'Approving...' : 'Approve'}
@@ -462,7 +462,7 @@ export default function Modal({ project, onClose }) {
               <button
                 onClick={handleDecline}
                 disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-magenta hover:bg-[#c9006a] text-white rounded-lg transition-colors disabled:opacity-50"
               >
                 <AlertCircle size={16} />
                 {isLoading ? 'Processing...' : (showCommentBox ? 'Submit Decline' : 'Decline')}
@@ -477,7 +477,7 @@ export default function Modal({ project, onClose }) {
                 <button
                   onClick={() => handleAdvanceStatus('in_production')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg transition-colors disabled:opacity-50"
                 >
                   <Factory size={16} />
                   {isLoading ? 'Updating...' : 'Send to Production'}
@@ -488,7 +488,7 @@ export default function Modal({ project, onClose }) {
                 <button
                   onClick={() => handleAdvanceStatus('in_quality_control')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2 bg-cesar-purple hover:bg-[#6a45a8] text-white rounded-lg transition-colors disabled:opacity-50"
                 >
                   <FlaskConical size={16} />
                   {isLoading ? 'Updating...' : 'Move to QC'}
@@ -499,7 +499,7 @@ export default function Modal({ project, onClose }) {
                 <button
                   onClick={() => handleAdvanceStatus('completed')}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors disabled:opacity-50"
                 >
                   <PackageCheck size={16} />
                   {isLoading ? 'Updating...' : 'Mark Completed'}
