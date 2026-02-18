@@ -125,8 +125,8 @@ export default function ClientManagement() {
 
   const getStatusBadge = (status) => {
     const styles = {
-      active: 'bg-green-100 text-green-800',
-      invited: 'bg-yellow-100 text-yellow-800',
+      active: 'bg-[#E6F9DD] text-[#2D7A0F]',
+      invited: 'bg-[#FEF3CD] text-[#92690B]',
       inactive: 'bg-gray-100 text-gray-800'
     };
     
@@ -154,7 +154,7 @@ export default function ClientManagement() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cesar-navy"></div>
       </div>
     );
   }
@@ -169,10 +169,10 @@ export default function ClientManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {getStatsCard('active', 'Active Clients', 'border-green-500')}
-        {getStatsCard('invited', 'Pending Invitations', 'border-yellow-500')}
-        {getStatsCard('inactive', 'Inactive Clients', 'border-gray-500')}
-        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+        {getStatsCard('active', 'Active Clients', 'border-cesar-green')}
+        {getStatsCard('invited', 'Pending Invitations', 'border-cesar-yellow')}
+        {getStatsCard('inactive', 'Inactive Clients', 'border-cesar-gray')}
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-cesar-navy">
           <div className="flex items-center">
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-600">Total Clients</p>
@@ -191,14 +191,14 @@ export default function ClientManagement() {
               placeholder="Search clients by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
             />
           </div>
           <div>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
             >
               <option value="all">All Clients</option>
               <option value="active">Active Only</option>
@@ -247,7 +247,7 @@ export default function ClientManagement() {
                         </div>
                         <div className="text-sm text-gray-500">{client.email}</div>
                         {client._isInvitation && (
-                          <div className="text-xs text-blue-500 mt-0.5">📨 Pending invitation</div>
+                          <div className="text-xs text-cesar-navy mt-0.5">📨 Pending invitation</div>
                         )}
                       </div>
                     </td>
@@ -273,7 +273,7 @@ export default function ClientManagement() {
                         {(client.status === 'invited' || client._isInvitation) && (
                           <button
                             onClick={() => handleResendInvitation(client)}
-                            className="text-blue-600 hover:text-blue-900 text-sm"
+                            className="text-cesar-navy hover:text-[#003d73] text-sm"
                             title="Resend invitation"
                           >
                             Resend
@@ -285,8 +285,8 @@ export default function ClientManagement() {
                             onClick={() => handleToggleStatus(client)}
                             className={`text-sm ${
                               client.status === 'active' 
-                                ? 'text-yellow-600 hover:text-yellow-900' 
-                                : 'text-green-600 hover:text-green-900'
+                                ? 'text-[#92690B] hover:text-[#6d4e08]' 
+                                : 'text-[#2D7A0F] hover:text-[#1e5a0a]'
                             }`}
                             title={client.status === 'active' ? 'Deactivate' : 'Activate'}
                           >
@@ -296,7 +296,7 @@ export default function ClientManagement() {
                         
                         <button
                           onClick={() => handleDeleteClient(client)}
-                          className="text-red-600 hover:text-red-900 text-sm"
+                          className="text-cesar-magenta hover:text-[#c9006a] text-sm"
                           title="Delete client"
                         >
                           Delete
@@ -312,18 +312,18 @@ export default function ClientManagement() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-blue-900 mb-2">Quick Actions</h3>
+      <div className="bg-[#E0EAF5] border border-cesar-navy/20 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-cesar-navy mb-2">Quick Actions</h3>
         <div className="flex flex-wrap gap-2">
           <button 
             onClick={fetchClients}
-            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            className="px-3 py-1 bg-cesar-navy text-white text-sm rounded hover:bg-[#003d73]"
           >
             Refresh List
           </button>
           <button 
             onClick={() => setFilter('invited')}
-            className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
+            className="px-3 py-1 bg-cesar-yellow text-[#92690B] text-sm rounded hover:bg-[#e5a611]"
           >
             View Pending Invitations
           </button>

@@ -127,9 +127,9 @@ export default function UserManagement() {
 
   const getRoleBadgeColor = (role) => {
     switch (role) {
-      case 'admin': return 'bg-purple-100 text-purple-800';
-      case 'designer': return 'bg-blue-100 text-blue-800';
-      case 'client': return 'bg-green-100 text-green-800';
+      case 'admin': return 'bg-[#EDE7F6] text-[#5A3695]';
+      case 'designer': return 'bg-[#E0EAF5] text-cesar-navy';
+      case 'client': return 'bg-[#E6F9DD] text-[#2D7A0F]';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -164,7 +164,7 @@ export default function UserManagement() {
   if (!isAdmin()) {
     return (
       <div className="text-center py-12">
-        <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <Shield className="w-16 h-16 text-cesar-magenta mx-auto mb-4" />
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Denied</h2>
         <p className="text-gray-600">You don't have permission to manage users.</p>
       </div>
@@ -174,7 +174,7 @@ export default function UserManagement() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cesar-navy"></div>
         <span className="ml-2 text-gray-600">Loading users...</span>
       </div>
     );
@@ -186,7 +186,7 @@ export default function UserManagement() {
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <Users className="w-6 h-6 text-blue-600" />
+            <Users className="w-6 h-6 text-cesar-navy" />
             <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
           </div>
           
@@ -210,20 +210,20 @@ export default function UserManagement() {
             <div className="text-2xl font-bold text-gray-900">{users.length}</div>
             <div className="text-sm text-gray-600">Total Users</div>
           </div>
-          <div className="bg-purple-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-purple-600">
+          <div className="bg-[#EDE7F6] rounded-lg p-4">
+            <div className="text-2xl font-bold text-cesar-purple">
               {users.filter(u => u.role === 'admin').length}
             </div>
             <div className="text-sm text-gray-600">Admins</div>
           </div>
-          <div className="bg-blue-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-blue-600">
+          <div className="bg-[#E0EAF5] rounded-lg p-4">
+            <div className="text-2xl font-bold text-cesar-navy">
               {users.filter(u => u.role === 'designer').length}
             </div>
             <div className="text-sm text-gray-600">Designers</div>
           </div>
-          <div className="bg-green-50 rounded-lg p-4">
-            <div className="text-2xl font-bold text-green-600">
+          <div className="bg-[#E6F9DD] rounded-lg p-4">
+            <div className="text-2xl font-bold text-cesar-green">
               {users.filter(u => u.role === 'client').length}
             </div>
             <div className="text-sm text-gray-600">Clients</div>
@@ -294,8 +294,8 @@ export default function UserManagement() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       user.isActive 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
+                        ? 'bg-[#E6F9DD] text-[#2D7A0F]' 
+                        : 'bg-[#FCE4EC] text-[#A8005A]'
                     }`}>
                       {user.isActive ? 'Active' : 'Inactive'}
                     </span>
@@ -309,7 +309,7 @@ export default function UserManagement() {
                         <>
                           <button
                             onClick={() => handleEditSave(user.id)}
-                            className="flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 bg-cesar-green hover:bg-[#66c23a] text-white text-xs rounded transition-colors"
                           >
                             <Save size={14} />
                             Save
@@ -326,7 +326,7 @@ export default function UserManagement() {
                         <>
                           <button
                             onClick={() => handleEditStart(user)}
-                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 bg-cesar-navy hover:bg-[#003d73] text-white text-xs rounded transition-colors"
                           >
                             <Edit2 size={14} />
                             Edit
@@ -335,8 +335,8 @@ export default function UserManagement() {
                             onClick={() => toggleUserStatus(user.id, user.isActive)}
                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors ${
                               user.isActive 
-                                ? 'bg-red-600 hover:bg-red-700 text-white' 
-                                : 'bg-green-600 hover:bg-green-700 text-white'
+                                ? 'bg-cesar-magenta hover:bg-[#c9006a] text-white' 
+                                : 'bg-cesar-green hover:bg-[#66c23a] text-white'
                             }`}
                           >
                             {user.isActive ? (
@@ -354,7 +354,7 @@ export default function UserManagement() {
                           {canDeleteUser(user) && (
                             <button
                               onClick={() => openDeleteModal(user)}
-                              className="flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors"
+                              className="flex items-center gap-1 px-2 py-1 bg-cesar-magenta hover:bg-[#c9006a] text-white text-xs rounded transition-colors"
                               title="Delete User"
                             >
                               <Trash2 size={14} />
@@ -377,8 +377,8 @@ export default function UserManagement() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex items-center gap-3 mb-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div className="flex-shrink-0 w-10 h-10 bg-[#FCE4EC] rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-cesar-magenta" />
               </div>
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Delete User</h3>
@@ -404,7 +404,7 @@ export default function UserManagement() {
               </button>
               <button
                 onClick={handleDeleteUser}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                className="px-4 py-2 bg-cesar-magenta hover:bg-[#c9006a] text-white rounded-lg transition-colors"
               >
                 Delete User
               </button>
@@ -417,8 +417,8 @@ export default function UserManagement() {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Role Descriptions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="border border-purple-200 rounded-lg p-4">
-            <h4 className="font-medium text-purple-800 mb-2">Admin</h4>
+          <div className="border border-cesar-purple/30 rounded-lg p-4">
+            <h4 className="font-medium text-[#5A3695] mb-2">Admin</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               <li>• View all proofs</li>
               <li>• Upload proofs</li>
@@ -427,8 +427,8 @@ export default function UserManagement() {
               <li>• Full system access</li>
             </ul>
           </div>
-          <div className="border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-800 mb-2">Designer</h4>
+          <div className="border border-cesar-navy/30 rounded-lg p-4">
+            <h4 className="font-medium text-cesar-navy mb-2">Designer</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               <li>• Upload proofs</li>
               <li>• <strong>Assign proofs to clients</strong></li>
@@ -437,8 +437,8 @@ export default function UserManagement() {
               <li>• No approval rights</li>
             </ul>
           </div>
-          <div className="border border-green-200 rounded-lg p-4">
-            <h4 className="font-medium text-green-800 mb-2">Client</h4>
+          <div className="border border-cesar-green/30 rounded-lg p-4">
+            <h4 className="font-medium text-[#2D7A0F] mb-2">Client</h4>
             <ul className="text-sm text-gray-600 space-y-1">
               <li>• View own proofs only</li>
               <li>• Approve/decline proofs</li>

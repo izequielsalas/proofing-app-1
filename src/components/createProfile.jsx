@@ -70,8 +70,8 @@ export default function CreateProfile() {
         <div className="bg-white rounded-lg shadow-lg p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-8 h-8 text-blue-600" />
+            <div className="w-16 h-16 bg-[#E0EAF5] rounded-full flex items-center justify-center mx-auto mb-4">
+              <User className="w-8 h-8 text-cesar-navy" />
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Complete Your Profile
@@ -158,14 +158,14 @@ export default function CreateProfile() {
             </div>
 
             {/* Info Box */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-[#E0EAF5] border border-cesar-navy/20 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
-                  <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600 text-xs font-bold">i</span>
+                  <div className="w-6 h-6 bg-[#E0EAF5] border border-cesar-navy/30 rounded-full flex items-center justify-center">
+                    <span className="text-cesar-navy text-xs font-bold">i</span>
                   </div>
                 </div>
-                <div className="text-sm text-blue-800">
+                <div className="text-sm text-cesar-navy">
                   <p className="font-medium mb-1">Account Setup</p>
                   <p>
                     Your account will be created as a <strong>Client</strong> with proof review permissions. 

@@ -12,7 +12,7 @@ export default function UnauthorizedPage() {
       <div className="max-w-md w-full text-center">
         <div className="bg-white rounded-lg shadow-lg p-8">
           <div className="mb-6">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+            <AlertCircle className="h-16 w-16 text-cesar-magenta mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
               Access Denied
             </h1>
@@ -23,7 +23,7 @@ export default function UnauthorizedPage() {
 
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <h3 className="font-medium text-gray-900 mb-2">Your Current Role:</h3>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-[#E0EAF5] text-cesar-navy capitalize">
               {userProfile?.role || 'Unknown'}
             </span>
           </div>
@@ -36,7 +36,6 @@ export default function UnauthorizedPage() {
               <Home size={16} />
               Return to Dashboard
             </Link>
-            
             <button
               onClick={() => window.history.back()}
               className="btn-secondary btn-full flex items-center justify-center gap-2"

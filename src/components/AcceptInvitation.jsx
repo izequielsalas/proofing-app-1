@@ -172,8 +172,8 @@ export default function AcceptInvitation() {
         const functions = getFunctions();
         const transferFunction = httpsCallable(functions, 'transferProofOwnership');
         const result = await transferFunction({
-          oldClientId: invitation.id,
-          newUserUid: user.uid
+          invitationId: invitation.id,  // Changed from oldClientId
+          userId: user.uid              // Changed from newUserUid
         });
         addDebugLog(`✅ ${result.data.proofsTransferred} proofs transferred`);
       } catch (transferErr) {
@@ -250,9 +250,9 @@ export default function AcceptInvitation() {
             <strong>Debug Log:</strong>
             {debugLog.map((log, i) => (
               <div key={i} className={
-                log.includes('❌') ? 'text-red-600' :
-                log.includes('✅') ? 'text-green-600' :
-                log.includes('⚠️') ? 'text-yellow-600' : 'text-gray-700'
+                log.includes('❌') ? 'text-[#A8005A]' :
+                log.includes('✅') ? 'text-[#2D7A0F]' :
+                log.includes('⚠️') ? 'text-[#92690B]' : 'text-gray-700'
               }>
                 {log}
               </div>
@@ -261,7 +261,7 @@ export default function AcceptInvitation() {
         )}
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+          <div className="mb-4 p-3 bg-[#FCE4EC] text-[#A8005A] rounded">
             {error}
           </div>
         )}
@@ -320,7 +320,7 @@ export default function AcceptInvitation() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="w-full bg-cesar-navy text-white py-2 rounded-md hover:bg-[#003d73] disabled:opacity-50"
             >
               {loading ? 'Creating Account...' : 'Create Account'}
             </button>

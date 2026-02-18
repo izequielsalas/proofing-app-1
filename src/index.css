@@ -1,17 +1,5 @@
 @import "tailwindcss";
 
-@theme {
-  --color-cesar-navy: #002855;
-  --color-cesar-white: #FFFFFF;
-  --color-cesar-green: #78D64B;
-  --color-cesar-cyan: #00FFFF;
-  --color-cesar-magenta: #E4007C;
-  --color-cesar-yellow: #FDB813;
-  --color-cesar-gray: #BBBBBB;
-  --color-cesar-purple: #7E57C2;
-  --color-cesar-orange: #FF6800;
-}
-
 /* Cesar Graphics - Official Color Palette */
 :root {
   --cesar-primary: #002855;     /* Navy — Pantone 295C */
@@ -23,9 +11,72 @@
   --cesar-dark: #1f2937;        /* Dark gray */
   --cesar-light: #f9fafb;       /* Light gray background */
   --cesar-white: #ffffff;
+
+  /* Full palette for reference */
+  --cesar-navy: #002855;
+  --cesar-green: #78D64B;
+  --cesar-cyan: #00FFFF;
+  --cesar-magenta: #E4007C;
+  --cesar-yellow: #FDB813;
+  --cesar-gray: #BBBBBB;
+  --cesar-purple: #7E57C2;
+  --cesar-orange: #FF6800;
 }
 
-/* Custom color classes for your components */
+/* ============================================
+   Cesar Brand Color Utilities
+   Use these in JSX: bg-cesar-navy, text-cesar-green, etc.
+   ============================================ */
+
+/* Navy — #002855 */
+.bg-cesar-navy { background-color: #002855; }
+.text-cesar-navy { color: #002855; }
+.border-cesar-navy { border-color: #002855; }
+.ring-cesar-navy { --tw-ring-color: #002855; }
+
+/* Green — #78D64B */
+.bg-cesar-green { background-color: #78D64B; }
+.text-cesar-green { color: #78D64B; }
+.border-cesar-green { border-color: #78D64B; }
+.ring-cesar-green { --tw-ring-color: #78D64B; }
+
+/* Magenta — #E4007C */
+.bg-cesar-magenta { background-color: #E4007C; }
+.text-cesar-magenta { color: #E4007C; }
+.border-cesar-magenta { border-color: #E4007C; }
+.ring-cesar-magenta { --tw-ring-color: #E4007C; }
+
+/* Yellow — #FDB813 */
+.bg-cesar-yellow { background-color: #FDB813; }
+.text-cesar-yellow { color: #FDB813; }
+.border-cesar-yellow { border-color: #FDB813; }
+.ring-cesar-yellow { --tw-ring-color: #FDB813; }
+
+/* Purple — #7E57C2 */
+.bg-cesar-purple { background-color: #7E57C2; }
+.text-cesar-purple { color: #7E57C2; }
+.border-cesar-purple { border-color: #7E57C2; }
+.ring-cesar-purple { --tw-ring-color: #7E57C2; }
+
+/* Orange — #FF6800 */
+.bg-cesar-orange { background-color: #FF6800; }
+.text-cesar-orange { color: #FF6800; }
+.border-cesar-orange { border-color: #FF6800; }
+.ring-cesar-orange { --tw-ring-color: #FF6800; }
+
+/* Cyan — #00FFFF */
+.bg-cesar-cyan { background-color: #00FFFF; }
+.text-cesar-cyan { color: #00FFFF; }
+.border-cesar-cyan { border-color: #00FFFF; }
+
+/* Gray — #BBBBBB */
+.bg-cesar-gray { background-color: #BBBBBB; }
+.text-cesar-gray { color: #BBBBBB; }
+.border-cesar-gray { border-color: #BBBBBB; }
+
+/* ============================================
+   Legacy alias utilities (from original file)
+   ============================================ */
 .bg-navy { background-color: var(--cesar-primary); }
 .text-navy { color: var(--cesar-primary); }
 .border-navy { border-color: var(--cesar-primary); }
@@ -38,7 +89,9 @@
 .bg-grey { background-color: var(--cesar-light); }
 .text-grey { color: #6b7280; }
 
-/* Enhanced button styles */
+/* ============================================
+   Enhanced button styles
+   ============================================ */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -289,7 +342,9 @@ button:disabled {
   background: linear-gradient(135deg, var(--cesar-primary) 0%, var(--cesar-secondary) 100%);
 }
 
-/* Add this to your index.css - UNIFIED BUTTON SYSTEM */
+/* ============================================
+   UNIFIED BUTTON SYSTEM
+   ============================================ */
 
 /* Base button reset - applies to ALL buttons */
 button {
@@ -396,11 +451,14 @@ button:not([class*="btn-"]):not(.unstyled):hover {
   color: var(--cesar-primary);
 }
 
-/* UNSTYLED - For custom styled buttons */
+/* UNSTYLED - For custom styled buttons (targeted reset, not all: unset) */
 .btn-unstyled,
 .unstyled {
-  all: unset;
-  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
 }
 
 /* SIZE VARIANTS */

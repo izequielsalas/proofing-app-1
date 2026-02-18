@@ -85,10 +85,10 @@ export default function ProtectedRoute({ children, requireRole = null }) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cesar-navy mx-auto mb-4"></div>
           <p className="text-gray-600">{message}</p>
           {firestoreError && (
-            <p className="text-sm text-yellow-600 mt-2">
+            <p className="text-sm text-[#92690B] mt-2">
               Having trouble connecting to database...
             </p>
           )}
@@ -104,7 +104,7 @@ export default function ProtectedRoute({ children, requireRole = null }) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cesar-navy mx-auto mb-4"></div>
           <p className="text-gray-600">Preparing your dashboard...</p>
         </div>
       </div>
