@@ -566,8 +566,13 @@ exports.handleProofStatusChange = onDocumentUpdated(
 // Triggers when a file is uploaded to Firebase Storage
 // =============================================================================
 
+// =============================================================================
+// PDF THUMBNAIL GENERATION
+// Triggers when a file is uploaded to Firebase Storage
+// =============================================================================
+
 exports.generatePdfThumbnail = onObjectFinalized(
-  { memory: "1GiB", timeoutSeconds: 120, region: "us-west1"},
+  { memory: "1GiB", timeoutSeconds: 120, region: "us-west1" },
   async (event) => {
     const filePath = event.data.name;
     const contentType = event.data.contentType;
@@ -581,32 +586,69 @@ exports.generatePdfThumbnail = onObjectFinalized(
     console.log("🖼️ Generating thumbnail for:", filePath);
 
     try {
-      const { createCanvas } = require("canvas");
-      const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
+      // Use @napi-rs/canvas — required for pdfjs-dist v5+
+      // (the old 'canvas' package is NOT compatible with pdfjs v5)
+      const { createCanvas, DOMMatrix, Image, ImageData, Path2D } = require("@napi-rs/canvas");
+
+      // Polyfill browser globals for pdfjs-dist in Node.js environment
+      global.DOMMatrix = DOMMatrix;
+      global.Image = Image;
+      global.ImageData = ImageData;
+      global.Path2D = Path2D;
+
+      // Polyfill document.createElement for pdfjs internal canvas creation
+      global.document = {
+        createElement: (tag) => createCanvas(1, 1),
+        createElementNS: (_ns, tag) => createCanvas(1, 1),
+      };
+
+      const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs");
 
       // Download PDF from Storage into a buffer
       const bucket = getStorage().bucket();
       const [pdfBuffer] = await bucket.file(filePath).download();
 
+      // Custom canvas factory so pdfjs uses @napi-rs/canvas
+      const NodeCanvasFactory = {
+        create(width, height) {
+          const canvas = createCanvas(width, height);
+          const context = canvas.getContext("2d");
+          return { canvas, context };
+        },
+        reset(canvasAndContext, width, height) {
+          canvasAndContext.canvas.width = width;
+          canvasAndContext.canvas.height = height;
+        },
+        destroy(canvasAndContext) {
+          canvasAndContext.canvas.width = 0;
+          canvasAndContext.canvas.height = 0;
+          canvasAndContext.canvas = null;
+          canvasAndContext.context = null;
+        },
+      };
+
       // Load PDF with pdfjs
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(pdfBuffer),
+        canvasFactory: NodeCanvasFactory,
+      });
       const pdfDoc = await loadingTask.promise;
       const page = await pdfDoc.getPage(1);
 
       // Set up canvas
       const scale = 1.5;
       const viewport = page.getViewport({ scale });
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext("2d");
+      const canvasAndContext = NodeCanvasFactory.create(viewport.width, viewport.height);
 
       // Render page to canvas
       await page.render({
-        canvasContext: context,
+        canvasContext: canvasAndContext.context,
         viewport,
+        canvasFactory: NodeCanvasFactory,
       }).promise;
 
       // Convert canvas to PNG buffer
-      const thumbnailBuffer = canvas.toBuffer("image/png");
+      const thumbnailBuffer = canvasAndContext.canvas.toBuffer("image/png");
 
       // Save thumbnail to Storage
       const fileName = filePath.split("/").pop().replace(".pdf", "");
@@ -622,9 +664,12 @@ exports.generatePdfThumbnail = onObjectFinalized(
       console.log("✅ Thumbnail saved:", thumbnailUrl);
 
       // Find the matching proof doc in Firestore and update it
+      // fileUrl contains the full Storage URL with the filename embedded,
+      // so we search using the original filePath which is part of the URL
+      const encodedPath = encodeURIComponent(filePath);
       const proofsQuery = await db.collection("proofs")
-        .where("fileUrl", ">=", fileName)
-        .where("fileUrl", "<=", fileName + "\uf8ff")
+        .where("fileUrl", ">=", encodedPath)
+        .where("fileUrl", "<=", encodedPath + "\uf8ff")
         .get();
 
       if (!proofsQuery.empty) {
@@ -632,7 +677,24 @@ exports.generatePdfThumbnail = onObjectFinalized(
         await proofDoc.ref.update({ thumbnailUrl });
         console.log("✅ Proof doc updated with thumbnailUrl:", proofDoc.id);
       } else {
-        console.log("⚠️ No matching proof doc found for:", fileName);
+        // Fallback: try matching by filename substring against all recent proofs
+        console.log("⚠️ Range query missed, trying fallback match for:", fileName);
+        const recentProofs = await db.collection("proofs")
+          .orderBy("createdAt", "desc")
+          .limit(20)
+          .get();
+
+        const match = recentProofs.docs.find(doc => {
+          const url = doc.data().fileUrl || "";
+          return url.includes(fileName);
+        });
+
+        if (match) {
+          await match.ref.update({ thumbnailUrl });
+          console.log("✅ Proof doc updated via fallback match:", match.id);
+        } else {
+          console.log("⚠️ No matching proof doc found for:", fileName);
+        }
       }
 
     } catch (error) {
@@ -640,7 +702,6 @@ exports.generatePdfThumbnail = onObjectFinalized(
     }
   }
 );
-
 // Health check endpoint
 exports.healthCheck = onRequest(async (req, res) => {
   res.json({
