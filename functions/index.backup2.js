@@ -1,9 +1,7 @@
 const { onCall, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
-const { getStorage } = require("firebase-admin/storage");
 const { defineSecret } = require("firebase-functions/params");
 const Resend = require("resend").Resend;
 
@@ -230,13 +228,14 @@ exports.sendClientInvitation = onCall(
 
       console.log(`📊 Found ${pendingProofs.length} pending proofs for ${clientEmail}`);
 
+      // Prepare template data with proof information
       const templateData = {
         clientName,
         inviterEmail: inviterEmail || 'Cesar Graphics',
         inviteUrl,
         hasPendingProofs: pendingProofs.length > 0,
         proofCount: pendingProofs.length,
-        proofs: pendingProofs.slice(0, 3),
+        proofs: pendingProofs.slice(0, 3), // Show max 3 proofs in email
         totalProofs: pendingProofs.length
       };
 
@@ -320,7 +319,7 @@ exports.sendProofNotification = onCall(
 );
 
 // =============================================================================
-// OTHER CLOUD FUNCTIONS
+// OTHER CLOUD FUNCTIONS (keep as-is from your backup)
 // =============================================================================
 
 // Transfer proof ownership from invitation ID to user Auth UID
@@ -379,9 +378,11 @@ exports.deleteUserCompletely = onCall(async (request) => {
   try {
     console.log(`🗑️ Starting complete deletion for user: ${userId}`);
 
+    // Delete user document
     await db.collection('users').doc(userId).delete();
     console.log('✅ User document deleted');
 
+    // Delete all proofs for this user
     const proofsQuery = await db.collection('proofs')
       .where('clientId', '==', userId)
       .get();
@@ -420,6 +421,7 @@ exports.handleNewProof = onDocumentCreated(
     try {
       const resend = new Resend(resendApiKey.value());
 
+      // 1. Send admin notification
       const adminEmailData = {
         from: FROM_EMAIL,
         to: ADMIN_EMAIL,
@@ -438,11 +440,13 @@ exports.handleNewProof = onDocumentCreated(
       await resend.emails.send(adminEmailData);
       console.log('✅ Admin notification sent');
 
+      // 2. Check if client should be notified
       if (!proof.clientId) {
         console.log('ℹ️ No clientId, skipping client notification');
         return;
       }
 
+      // Look up client in users collection first
       let clientData = null;
       let clientDoc = await db.collection('users').doc(proof.clientId).get();
 
@@ -450,6 +454,7 @@ exports.handleNewProof = onDocumentCreated(
         clientData = clientDoc.data();
         console.log('📧 Client found in users collection');
       } else {
+        // Fallback: check invitations collection
         clientDoc = await db.collection('invitations').doc(proof.clientId).get();
         if (clientDoc.exists) {
           clientData = clientDoc.data();
@@ -462,6 +467,7 @@ exports.handleNewProof = onDocumentCreated(
         return;
       }
 
+      // Only notify active clients (those who have signed up)
       if (clientData.status === 'active') {
         const clientEmailData = {
           from: FROM_EMAIL,
@@ -497,6 +503,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
     const beforeData = event.data.before.data();
     const afterData = event.data.after.data();
 
+    // Only proceed if status changed
     if (beforeData.status === afterData.status) {
       return;
     }
@@ -515,6 +522,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
     try {
       const resend = new Resend(resendApiKey.value());
 
+      // Admin notification for all status changes
       const adminEmailData = {
         from: FROM_EMAIL,
         to: ADMIN_EMAIL,
@@ -533,6 +541,9 @@ exports.handleProofStatusChange = onDocumentUpdated(
       await resend.emails.send(adminEmailData);
       console.log('✅ Admin status notification sent');
 
+      // Client notifications for production statuses
+      // Send on: in_production, completed
+      // Skip on: in_quality_control (internal step)
       const clientNotifyStatuses = ['in_production', 'completed'];
 
       if (clientNotifyStatuses.includes(afterData.status) && afterData.clientEmail) {
@@ -561,86 +572,6 @@ exports.handleProofStatusChange = onDocumentUpdated(
   }
 );
 
-// =============================================================================
-// PDF THUMBNAIL GENERATION
-// Triggers when a file is uploaded to Firebase Storage
-// =============================================================================
-
-exports.generatePdfThumbnail = onObjectFinalized(
-  { memory: "1GiB", timeoutSeconds: 120, region: "us-west1"},
-  async (event) => {
-    const filePath = event.data.name;
-    const contentType = event.data.contentType;
-
-    // Only process PDFs in the proofFiles folder
-    if (!filePath.startsWith("proofFiles/") || contentType !== "application/pdf") {
-      console.log("⏭️ Skipping non-PDF or wrong folder:", filePath);
-      return;
-    }
-
-    console.log("🖼️ Generating thumbnail for:", filePath);
-
-    try {
-      const { createCanvas } = require("canvas");
-      const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-
-      // Download PDF from Storage into a buffer
-      const bucket = getStorage().bucket();
-      const [pdfBuffer] = await bucket.file(filePath).download();
-
-      // Load PDF with pdfjs
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
-      const pdfDoc = await loadingTask.promise;
-      const page = await pdfDoc.getPage(1);
-
-      // Set up canvas
-      const scale = 1.5;
-      const viewport = page.getViewport({ scale });
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext("2d");
-
-      // Render page to canvas
-      await page.render({
-        canvasContext: context,
-        viewport,
-      }).promise;
-
-      // Convert canvas to PNG buffer
-      const thumbnailBuffer = canvas.toBuffer("image/png");
-
-      // Save thumbnail to Storage
-      const fileName = filePath.split("/").pop().replace(".pdf", "");
-      const thumbnailPath = `thumbnailFiles/${fileName}.png`;
-      await bucket.file(thumbnailPath).save(thumbnailBuffer, {
-        metadata: { contentType: "image/png" },
-      });
-
-      // Make thumbnail publicly accessible
-      await bucket.file(thumbnailPath).makePublic();
-      const thumbnailUrl = `https://storage.googleapis.com/${bucket.name}/${thumbnailPath}`;
-
-      console.log("✅ Thumbnail saved:", thumbnailUrl);
-
-      // Find the matching proof doc in Firestore and update it
-      const proofsQuery = await db.collection("proofs")
-        .where("fileUrl", ">=", fileName)
-        .where("fileUrl", "<=", fileName + "\uf8ff")
-        .get();
-
-      if (!proofsQuery.empty) {
-        const proofDoc = proofsQuery.docs[0];
-        await proofDoc.ref.update({ thumbnailUrl });
-        console.log("✅ Proof doc updated with thumbnailUrl:", proofDoc.id);
-      } else {
-        console.log("⚠️ No matching proof doc found for:", fileName);
-      }
-
-    } catch (error) {
-      console.error("❌ Error generating thumbnail:", error);
-    }
-  }
-);
-
 // Health check endpoint
 exports.healthCheck = onRequest(async (req, res) => {
   res.json({
@@ -648,12 +579,11 @@ exports.healthCheck = onRequest(async (req, res) => {
     timestamp: new Date().toISOString(),
     functions: [
       'sendClientInvitation',
-      'sendProofNotification',
+      'sendProofNotification', 
       'transferProofOwnership',
       'deleteUserCompletely',
       'handleNewProof',
       'handleProofStatusChange',
-      'generatePdfThumbnail',
       'healthCheck'
     ]
   });

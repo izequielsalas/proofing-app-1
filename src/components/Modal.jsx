@@ -6,10 +6,18 @@ import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck } from "lucide-react";
 import UploadProof from "./uploadProof";
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 export default function Modal({ project, onClose }) {
   const stopPropagation = (e) => e.stopPropagation();
-  const isPDF = project.fileUrl?.endsWith(".pdf");
+  const isPDF = project.fileUrl?.toLowerCase().includes('.pdf');
   const { hasPermission } = useAuth();
   
   const [showCommentBox, setShowCommentBox] = useState(false);
@@ -276,11 +284,11 @@ export default function Modal({ project, onClose }) {
           {/* File Display */}
           <div className="mb-6">
             {isPDF ? (
-              <iframe
-                src={project.fileUrl}
-                className="w-full h-[500px] rounded-lg border shadow-sm"
-                title={`proof-${project.id}`}
-              />
+          <iframe
+            src={`https://docs.google.com/viewer?url=${encodeURIComponent(project.fileUrl)}&embedded=true`}
+            className="w-full h-[500px] rounded-lg border shadow-sm"
+            title={`proof-${project.id}`}
+          />
             ) : (
               <img
                 src={project.fileUrl}

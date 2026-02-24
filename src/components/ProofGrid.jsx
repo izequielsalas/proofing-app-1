@@ -30,12 +30,27 @@ function groupProofsByChain(proofs) {
 
 // ─── Revision thumbnail (used for the cards peeking behind) ──────────────────
 function RevisionThumbnail({ proof }) {
-  const isPDF = proof?.fileUrl?.endsWith(".pdf");
+  const isPDF = proof?.fileUrl?.toLowerCase().includes(".pdf");
 
   if (!proof?.fileUrl) {
     return <div className="w-full h-full bg-gray-200" />;
   }
 
+  // If PDF has a thumbnail, show it
+  if (isPDF && proof.thumbnailUrl) {
+    return (
+      <img
+        src={proof.thumbnailUrl}
+        alt="Previous revision"
+        className="w-full h-full object-cover opacity-80"
+        onError={(e) => {
+          e.target.style.display = "none";
+        }}
+      />
+    );
+  }
+
+  // PDF without thumbnail — show icon
   if (isPDF) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-red-50">
@@ -44,6 +59,7 @@ function RevisionThumbnail({ proof }) {
     );
   }
 
+  // Image file
   return (
     <img
       src={proof.fileUrl}
@@ -51,7 +67,6 @@ function RevisionThumbnail({ proof }) {
       className="w-full h-full object-cover opacity-80"
       onError={(e) => {
         e.target.style.display = "none";
-        e.target.nextElementSibling.style.display = "flex";
       }}
     />
   );
@@ -97,6 +112,7 @@ function StackedCard({ group, onOpen }) {
         <WorkItem
           title={latest.title || `Proof #${latest.id?.slice(-6)}`}
           fileUrl={latest.fileUrl}
+          thumbnailUrl={latest.thumbnailUrl}
           status={latest.status}
           clientName={latest.clientName}
           createdAt={latest.createdAt}
