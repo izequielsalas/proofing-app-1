@@ -267,7 +267,7 @@ export default function Dashboard() {
           <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-cesar-magenta"  bgColor="bg-[#FCE4EC]"   borderColor="border-cesar-magenta" />
           <StatCard label="In Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
           <StatCard label="In QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
-          <StatCard label="Completed"     value={stats.completed}          filterKey="completed"          iconColor="bg-cesar-navy"     bgColor="bg-[#E0EAF5]"   borderColor="border-cesar-navy" />
+          <StatCard label="Completed" value={stats.completed} filterKey="completed" iconColor="bg-[#0099CC]" bgColor="bg-[#D6F0FF]" borderColor="border-[#0099CC]" />
         </div>
 
         {/* Controls */}

@@ -11,7 +11,7 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
       case 'in_production': return 'bg-[#FFF0E0] text-[#B34D00]';
       case 'in_quality_control': return 'bg-[#EDE7F6] text-[#5A3695]';
       case 'completed': return 'bg-[#E0EAF5] text-[#002855]';
-      default: return 'bg-[#FEF3CD] text-[#92690B]';
+      default: return 'bg-[#D6F0FF] text-[#006699]';
     }
   };
 
@@ -156,8 +156,8 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             )}
             {status === 'completed' && (
               <div className="flex items-center gap-1">
-                <PackageCheck className="w-3 h-3 text-cesar-navy" />
-                <span className="text-xs text-cesar-navy font-medium">Completed</span>
+                <PackageCheck className="w-3 h-3 text-[#0099CC]" />
+                <span className="text-xs text-[#006699] font-medium">Completed</span>
               </div>
             )}
           </div>

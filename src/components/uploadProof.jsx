@@ -1,13 +1,13 @@
-// src/components/uploadProof.jsx - UPDATED: Invitations go to 'invitations' collection
+// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection
 import React, { useState, useRef, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { sendInvitationEmail, sendProofReadyEmail } from '../utils/emailService';
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 
-export default function UploadProof({ onUploadComplete }) {
+export default function UploadProof({ onUploadComplete, revisionMode = false, parentProof = null }) {
   const [files, setFiles] = useState([]);
   const [projectTitle, setProjectTitle] = useState('');
   const [clientName, setClientName] = useState('');
@@ -31,9 +31,17 @@ export default function UploadProof({ onUploadComplete }) {
     setDebugLog(prev => [...prev, { message: logEntry, type }]);
   };
 
-  // ⭐ UPDATED: Fetch clients from BOTH users and invitations collections
+  // Pre-fill title from parent proof in revision mode
   useEffect(() => {
-    if (canAssignProofs()) {
+    if (revisionMode && parentProof) {
+      setProjectTitle(parentProof.title || '');
+      addDebugLog(`🔄 Revision mode active — chain: ${parentProof.revisionChainId || parentProof.id}`);
+    }
+  }, [revisionMode, parentProof]);
+
+  // ⭐ Fetch clients from BOTH users and invitations collections (only in normal mode)
+  useEffect(() => {
+    if (!revisionMode && canAssignProofs()) {
       const fetchClients = async () => {
         try {
           addDebugLog('Fetching client list from users + invitations...');
@@ -58,7 +66,7 @@ export default function UploadProof({ onUploadComplete }) {
           const pendingClients = invitationsSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            status: 'invited',  // Normalize status for display
+            status: 'invited',
             _isInvitation: true
           }));
 
@@ -82,23 +90,21 @@ export default function UploadProof({ onUploadComplete }) {
       };
       fetchClients();
     }
-  }, [canAssignProofs]);
+  }, [revisionMode, canAssignProofs]);
 
-  // ⭐ UPDATED: Invite to 'invitations' collection instead of 'users'
+  // ⭐ Invite to 'invitations' collection instead of 'users'
   const handleInviteClient = async () => {
     if (!clientEmail.trim() || !clientName.trim()) {
       alert('Please enter both client name and email');
       return;
     }
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(clientEmail)) {
       alert('Please enter a valid email');
       return;
     }
 
-    // Check if client already exists in either collection
     const existingClient = clients.find(c => 
       c.email?.toLowerCase() === clientEmail.toLowerCase()
     );
@@ -116,7 +122,6 @@ export default function UploadProof({ onUploadComplete }) {
     addDebugLog(`Starting invitation process for ${clientEmail}`);
 
     try {
-      // ⭐ NEW: Write to 'invitations' collection instead of 'users'
       const invitationData = {
         email: clientEmail.trim().toLowerCase(),
         displayName: clientName.trim(),
@@ -131,30 +136,23 @@ export default function UploadProof({ onUploadComplete }) {
       const invitationRef = await addDoc(collection(db, 'invitations'), invitationData);
       addDebugLog(`✅ Invitation created with ID: ${invitationRef.id}`);
       
-      // Send invitation email
       addDebugLog('🔄 Sending invitation email...');
       try {
-        const emailResult = await sendInvitationEmail(
-          clientEmail, clientName, auth.currentUser?.email
-        );
+        await sendInvitationEmail(clientEmail, clientName, auth.currentUser?.email);
         addDebugLog(`✅ Invitation email sent!`);
       } catch (emailError) {
         addDebugLog(`❌ Invitation email failed: ${emailError.message}`, 'error');
-        // Continue — don't fail the whole process
       }
 
-      // ⭐ Use the invitation ID as the temporary clientId for proofs
-      // This will be transferred to the real Auth UID when they sign up
       const newClient = { 
         id: invitationRef.id,
         ...invitationData,
-        status: 'invited',  // Normalize for display
+        status: 'invited',
         _isInvitation: true
       };
       setClients(prev => [...prev, newClient]);
       setSelectedClientId(invitationRef.id);
       
-      // Clear form
       setClientEmail('');
       setClientName('');
       setShowInviteForm(false);
@@ -202,28 +200,56 @@ export default function UploadProof({ onUploadComplete }) {
       return isValidSize;
     });
 
-    setFiles(prev => [...prev, ...validSizedFiles]);
+    // In revision mode, only allow one file
+    if (revisionMode) {
+      setFiles([validSizedFiles[0]].filter(Boolean));
+    } else {
+      setFiles(prev => [...prev, ...validSizedFiles]);
+    }
   };
 
   const uploadFiles = async () => {
     if (files.length === 0) return alert('Please select at least one file');
     if (!projectTitle.trim()) return alert('Please enter a project title');
     
-    if (canAssignProofs() && !selectedClientId) {
+    if (!revisionMode && canAssignProofs() && !selectedClientId) {
       return alert('Please select a client or invite a new one');
     }
 
     setUploading(true);
     setDebugLog([]);
-    addDebugLog('🚀 Starting proof upload process...');
+    addDebugLog(revisionMode ? '🔄 Starting revision upload...' : '🚀 Starting proof upload process...');
     
     const user = auth.currentUser;
 
     try {
-      const selectedClient = clients.find(c => c.id === selectedClientId);
-      addDebugLog(`Selected client: ${selectedClient?.displayName} (${selectedClient?.email})`);
-      addDebugLog(`Client status: ${selectedClient?.status}${selectedClient?._isInvitation ? ' [from invitations collection]' : ''}`);
-      
+      const selectedClient = revisionMode
+        ? null
+        : clients.find(c => c.id === selectedClientId);
+
+      if (!revisionMode) {
+        addDebugLog(`Selected client: ${selectedClient?.displayName} (${selectedClient?.email})`);
+        addDebugLog(`Client status: ${selectedClient?.status}${selectedClient?._isInvitation ? ' [from invitations collection]' : ''}`);
+      }
+
+      // ── Revision chain setup ──
+      let chainId = null;
+      let nextRevisionNumber = 1;
+
+      if (revisionMode && parentProof) {
+        chainId = parentProof.revisionChainId || parentProof.id;
+
+        // Query the full chain to get the actual max revision number
+        const chainSnapshot = await getDocs(
+          query(collection(db, 'proofs'), where('revisionChainId', '==', chainId))
+        );
+        const maxRevision = chainSnapshot.docs.reduce((max, d) => {
+          return Math.max(max, d.data().revisionNumber || 1);
+        }, 1);
+        nextRevisionNumber = maxRevision + 1;
+        addDebugLog(`📎 Chain: ${chainId} | Next version: v${nextRevisionNumber}`);
+      }
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         addDebugLog(`📁 Uploading file ${i + 1}/${files.length}: ${file.name}`);
@@ -241,10 +267,29 @@ export default function UploadProof({ onUploadComplete }) {
         const downloadURL = await getDownloadURL(fileRef);
         addDebugLog(`✅ File uploaded to storage: ${fileName}`);
 
-        // Create proof document
-        // ⭐ clientId will be the invitation doc ID for pending clients,
-        // or the Auth UID for active clients. AcceptInvitation handles the transfer.
-        const proofData = {
+        const proofData = revisionMode ? {
+          // ── Revision proof — inherits all client info from parent ──
+          title: parentProof.title,
+          clientName: parentProof.clientName,
+          clientId: parentProof.clientId,
+          clientEmail: parentProof.clientEmail,
+          clientStatus: parentProof.clientStatus || 'active',
+          fileUrl: downloadURL,
+          fileName: file.name,
+          fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
+          fileSize: file.size,
+          status: 'pending',
+          notes: notes.trim(),
+          uploadedBy: user?.uid,
+          uploaderEmail: user?.email,
+          createdAt: serverTimestamp(),
+          assignedAt: new Date(),
+          // ⭐ Revision-specific fields
+          parentProofId: parentProof.id,
+          revisionChainId: chainId,
+          revisionNumber: nextRevisionNumber,
+        } : {
+          // ── New proof ──
           title: projectTitle.trim(),
           clientName: selectedClient?.displayName || selectedClient?.email,
           clientId: selectedClientId,
@@ -259,12 +304,22 @@ export default function UploadProof({ onUploadComplete }) {
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
           createdAt: serverTimestamp(),
-          assignedAt: new Date()
+          assignedAt: new Date(),
+          // ⭐ Original proof fields (revisionChainId set after addDoc)
+          parentProofId: null,
+          revisionNumber: 1,
         };
 
         addDebugLog(`📝 Creating proof document in Firestore...`);
-        await addDoc(collection(db, 'proofs'), proofData);
-        addDebugLog(`✅ Proof document created successfully`);
+        const docRef = await addDoc(collection(db, 'proofs'), proofData);
+
+        // For new proofs, set revisionChainId = its own doc ID
+        if (!revisionMode) {
+          await updateDoc(doc(db, 'proofs', docRef.id), { revisionChainId: docRef.id });
+          addDebugLog(`✅ New proof created — chain ID: ${docRef.id}`);
+        } else {
+          addDebugLog(`✅ Revision v${nextRevisionNumber} created — doc ID: ${docRef.id}`);
+        }
 
         setUploadProgress(prev => ({
           ...prev,
@@ -272,22 +327,24 @@ export default function UploadProof({ onUploadComplete }) {
         }));
       }
 
-      // Check if we need to send proof ready email for invited clients
-      if (selectedClient?.status === 'invited' || selectedClient?._isInvitation) {
-        addDebugLog('🔄 Client is invited - sending proof ready notification...');
-        try {
-          const notificationResult = await sendProofReadyEmail(
-            selectedClient.email, 
-            selectedClient.displayName, 
-            projectTitle
-          );
-          addDebugLog(`✅ Proof ready notification sent! Result: ${JSON.stringify(notificationResult)}`);
-        } catch (emailError) {
-          addDebugLog(`❌ Proof ready notification failed: ${emailError.message}`, 'error');
-          console.error('Proof ready notification error:', emailError);
+      // Email notifications (only for new proofs, not revisions)
+      if (!revisionMode) {
+        if (selectedClient?.status === 'invited' || selectedClient?._isInvitation) {
+          addDebugLog('🔄 Client is invited - sending proof ready notification...');
+          try {
+            await sendProofReadyEmail(
+              selectedClient.email, 
+              selectedClient.displayName, 
+              projectTitle
+            );
+            addDebugLog(`✅ Proof ready notification sent!`);
+          } catch (emailError) {
+            addDebugLog(`❌ Proof ready notification failed: ${emailError.message}`, 'error');
+            console.error('Proof ready notification error:', emailError);
+          }
+        } else {
+          addDebugLog('ℹ️ Client is active - automatic notification will be sent by Firebase Function');
         }
-      } else {
-        addDebugLog('ℹ️ Client is active - automatic notification will be sent by Firebase Function');
       }
 
       // Reset form
@@ -296,10 +353,9 @@ export default function UploadProof({ onUploadComplete }) {
       setSelectedClientId('');
       setNotes('');
       setUploadProgress({});
-      fileInputRef.current.value = '';
+      if (fileInputRef.current) fileInputRef.current.value = '';
       
-      addDebugLog('🎉 Upload process completed successfully!');
-      alert('Proofs uploaded successfully!');
+      addDebugLog('🎉 Upload completed successfully!');
       onUploadComplete?.();
       
     } catch (error) {
@@ -340,29 +396,43 @@ export default function UploadProof({ onUploadComplete }) {
       )}
 
       <div className="border-b border-gray-200 pb-4">
-        <h3 className="text-lg font-medium text-gray-900">Upload New Proof</h3>
-        <p className="text-sm text-gray-600 mt-1">
-          Upload files for client review and approval
-        </p>
+        {revisionMode ? (
+          <>
+            <h3 className="text-lg font-medium text-gray-900">Upload Revision</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Uploading a new version for: <span className="font-medium">{parentProof?.title}</span>
+            </p>
+          </>
+        ) : (
+          <>
+            <h3 className="text-lg font-medium text-gray-900">Upload New Proof</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Upload files for client review and approval
+            </p>
+          </>
+        )}
       </div>
 
-      {/* Project Title */}
+      {/* Project Title — read-only in revision mode */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Project Title *
+          Project Title {!revisionMode && '*'}
         </label>
         <input
           type="text"
           value={projectTitle}
           onChange={(e) => setProjectTitle(e.target.value)}
           placeholder="Enter project or job title"
-          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
-          disabled={uploading}
+          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy disabled:bg-gray-50 disabled:text-gray-500"
+          disabled={uploading || revisionMode}
         />
+        {revisionMode && (
+          <p className="text-xs text-gray-500 mt-1">Title is inherited from the original proof.</p>
+        )}
       </div>
 
-      {/* Client Assignment - Only for admins and designers */}
-      {canAssignProofs() && (
+      {/* Client Assignment — only shown in normal mode */}
+      {!revisionMode && canAssignProofs() && (
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">
@@ -378,7 +448,6 @@ export default function UploadProof({ onUploadComplete }) {
             </button>
           </div>
           
-          {/* Existing Clients Dropdown */}
           <select
             value={selectedClientId}
             onChange={(e) => setSelectedClientId(e.target.value)}
@@ -394,7 +463,6 @@ export default function UploadProof({ onUploadComplete }) {
             ))}
           </select>
 
-          {/* Invite New Client Form */}
           {showInviteForm && (
             <div className="mt-4 p-4 bg-[#E0EAF5] border border-cesar-navy/20 rounded-lg">
               <h4 className="text-sm font-medium text-cesar-navy mb-3">Invite New Client</h4>
@@ -448,12 +516,15 @@ export default function UploadProof({ onUploadComplete }) {
       {/* Notes */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Notes (Optional)
+          {revisionMode ? 'Revision Notes (Optional)' : 'Notes (Optional)'}
         </label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Any special instructions or notes for this proof..."
+          placeholder={revisionMode
+            ? "Describe what changed in this revision..."
+            : "Any special instructions or notes for this proof..."
+          }
           rows={3}
           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy resize-none"
           disabled={uploading}
@@ -465,7 +536,7 @@ export default function UploadProof({ onUploadComplete }) {
         <input
           type="file"
           accept="application/pdf,image/*"
-          multiple
+          multiple={!revisionMode}
           ref={fileInputRef}
           onChange={handleFileSelect}
           className="hidden"
@@ -474,10 +545,13 @@ export default function UploadProof({ onUploadComplete }) {
         
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <p className="text-lg font-medium text-gray-900 mb-2">
-          Drop files here or click to browse
+          {revisionMode ? 'Upload revised file' : 'Drop files here or click to browse'}
         </p>
         <p className="text-sm text-gray-600 mb-4">
-          Supports PDF and image files up to 10MB each
+          {revisionMode
+            ? 'Upload one PDF or image file (replaces previous version)'
+            : 'Supports PDF and image files up to 10MB each'
+          }
         </p>
         
         <button
@@ -486,7 +560,7 @@ export default function UploadProof({ onUploadComplete }) {
           disabled={uploading}
           className="px-6 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors disabled:opacity-50"
         >
-          Select Files
+          Select {revisionMode ? 'File' : 'Files'}
         </button>
       </div>
 
@@ -543,12 +617,19 @@ export default function UploadProof({ onUploadComplete }) {
         <div className="flex justify-end">
           <button
             onClick={uploadFiles}
-            disabled={uploading || !projectTitle.trim() || 
-              (canAssignProofs() && !selectedClientId)
+            disabled={
+              uploading ||
+              !projectTitle.trim() ||
+              (!revisionMode && canAssignProofs() && !selectedClientId)
             }
             className="px-6 py-3 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {uploading ? 'Uploading...' : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`}
+            {uploading
+              ? 'Uploading...'
+              : revisionMode
+                ? 'Upload Revision'
+                : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`
+            }
           </button>
         </div>
       )}
