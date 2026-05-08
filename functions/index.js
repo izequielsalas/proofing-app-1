@@ -148,7 +148,12 @@ const getSimpleProductionStatusTemplate = (data) => {
     completed: {
       heading: 'Your Order is Ready!',
       message: 'Your order has been completed and is ready for pickup or delivery.'
-    }
+    },
+    // ADD after the in_production entry:
+      in_quality_control: {
+      heading: 'Your Order is Being Quality Checked',
+      message: 'Your order has been completed and is going through our final quality review before it\'s ready.'
+    },
   };
 
   const config = statusMessages[status] || statusMessages.in_production;
@@ -533,7 +538,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
       await resend.emails.send(adminEmailData);
       console.log('✅ Admin status notification sent');
 
-      const clientNotifyStatuses = ['in_production', 'completed'];
+      const clientNotifyStatuses = ['in_production', 'in_quality_control', 'completed'];
 
       if (clientNotifyStatuses.includes(afterData.status) && afterData.clientEmail) {
         const clientEmailData = {
@@ -551,9 +556,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
         await resend.emails.send(clientEmailData);
         console.log(`✅ Client notified of ${afterData.status} status`);
-      } else if (afterData.status === 'in_quality_control') {
-        console.log('ℹ️ Skipping client email for in_quality_control (internal step)');
-      }
+
 
     } catch (error) {
       console.error('❌ Error in handleProofStatusChange:', error);
