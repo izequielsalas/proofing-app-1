@@ -145,15 +145,15 @@ const getSimpleProductionStatusTemplate = (data) => {
       heading: 'Your Order is Now in Production',
       message: 'Great news! We\'ve started working on your order.'
     },
+    in_quality_control: {
+      heading: 'Your Order is Being Quality Checked',
+      message: 'Your order has been completed and is going through our final quality review before it\'s ready.'
+    },
     completed: {
       heading: 'Your Order is Ready!',
       message: 'Your order has been completed and is ready for pickup or delivery.'
     },
-    // ADD after the in_production entry:
-      in_quality_control: {
-      heading: 'Your Order is Being Quality Checked',
-      message: 'Your order has been completed and is going through our final quality review before it\'s ready.'
-    },
+
   };
 
   const config = statusMessages[status] || statusMessages.in_production;
@@ -556,6 +556,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
         await resend.emails.send(clientEmailData);
         console.log(`✅ Client notified of ${afterData.status} status`);
+      }
 
 
     } catch (error) {
