@@ -1,11 +1,11 @@
-// src/components/AcceptInvitation.jsx - UPDATED for invitations collection + race condition fix
+// src/components/AcceptInvitation.jsx
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { 
   collection, query, where, getDocs, 
-  doc, setDoc, updateDoc, writeBatch 
+  doc, setDoc, updateDoc
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,7 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function AcceptInvitation() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setInvitationMode } = useAuth();
+  const { refreshUserProfile } = useAuth();
 
   const [invitation, setInvitation] = useState(null);
   const [email, setEmail] = useState('');
@@ -104,9 +104,6 @@ export default function AcceptInvitation() {
     setError('');
     setDebugLog([]);
 
-    // ⭐ Tell AuthContext to stand down — we're handling profile creation
-    setInvitationMode(true);
-
     try {
       addDebugLog('🚀 Starting invitation acceptance...');
 
@@ -142,17 +139,22 @@ export default function AcceptInvitation() {
         uid: user.uid,
         email: user.email,
         displayName: displayName.trim(),
-        role: 'client',
+        role: invitation.role || 'client',
         status: 'active',
         isActive: true,
-        clientId: user.uid,  // ⭐ This is the key — clientId === UID
+        clientId: user.uid,
         activatedAt: new Date(),
         emailVerified: user.emailVerified,
         invitedBy: invitation.invitedBy || null,
         inviterEmail: invitation.inviterEmail || null,
         invitedAt: invitation.invitedAt || null,
         originalInvitationId: invitation.id,
-        permissions: {
+        permissions: invitation.role === 'designer' ? {
+          canViewAllProofs: false,
+          canUploadProofs: true,
+          canApproveProofs: false,
+          canManageUsers: false
+        } : {
           canViewAllProofs: false,
           canUploadProofs: false,
           canApproveProofs: true,
@@ -172,10 +174,10 @@ export default function AcceptInvitation() {
         const functions = getFunctions();
         const transferFunction = httpsCallable(functions, 'transferProofOwnership');
         const result = await transferFunction({
-          invitationId: invitation.id,  // Changed from oldClientId
-          userId: user.uid              // Changed from newUserUid
+          invitationId: invitation.id,
+          userId: user.uid
         });
-        addDebugLog(`✅ ${result.data.proofsTransferred} proofs transferred`);
+        addDebugLog(`✅ ${result.data.transferredCount} proofs transferred`);
       } catch (transferErr) {
         addDebugLog(`⚠️ Proof transfer failed: ${transferErr.message}`);
         addDebugLog('Contact admin if you don\'t see your proofs.');
@@ -191,7 +193,6 @@ export default function AcceptInvitation() {
             userUid: user.uid
           });
         } else {
-          // Legacy: mark old users-collection invitation
           await updateDoc(doc(db, 'users', invitation.id), {
             status: 'processed',
             processedAt: new Date(),
@@ -207,10 +208,9 @@ export default function AcceptInvitation() {
 
       addDebugLog('🎉 Account activation complete!');
 
-      // ⭐ Done — AuthContext can resume normal operation
-      setInvitationMode(false);
+      // Refresh AuthContext with the new profile then navigate
+      await refreshUserProfile();
 
-      // Small delay to let AuthContext pick up the new profile
       setTimeout(() => {
         navigate('/dashboard', {
           state: {
@@ -221,7 +221,6 @@ export default function AcceptInvitation() {
 
     } catch (err) {
       console.error('Invitation acceptance error:', err);
-      setInvitationMode(false); // ⭐ Reset on error too
       setError(err.message);
       addDebugLog(`❌ Error: ${err.message}`);
       setLoading(false);
@@ -244,7 +243,6 @@ export default function AcceptInvitation() {
           Welcome to Cesar Graphics
         </h2>
 
-        {/* Debug Panel */}
         {debugLog.length > 0 && (
           <div className="mb-4 p-3 bg-gray-100 rounded text-xs max-h-48 overflow-y-auto">
             <strong>Debug Log:</strong>

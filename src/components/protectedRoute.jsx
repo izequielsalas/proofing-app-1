@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function ProtectedRoute({ children, requireRole = null }) {
@@ -8,88 +10,65 @@ export default function ProtectedRoute({ children, requireRole = null }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Wait for authentication to initialize
     if (loading) return;
 
-    console.log('ProtectedRoute check:', { 
-      currentUser: !!currentUser, 
-      userProfile: !!userProfile, 
+    console.log('ProtectedRoute check:', {
+      currentUser: !!currentUser,
+      userProfile: !!userProfile,
       firestoreError,
-      currentPath: window.location.pathname 
+      currentPath: window.location.pathname
     });
 
-    // If no user is authenticated, redirect to auth
+    // Not logged in — send to auth
     if (!currentUser) {
-      console.log('No current user, redirecting to auth');
       navigate('/auth');
       return;
     }
 
-    // Special case: If user has a profile but is on createProfile page, redirect to dashboard
-    if (currentUser && userProfile && window.location.pathname === '/createProfile') {
-      console.log('User has profile but is on createProfile page, redirecting to dashboard');
-      navigate('/dashboard');
+    // Logged in but no profile found — not an invited user
+    // Sign them out and redirect with an error message
+    if (currentUser && firestoreError === 'no_profile') {
+      console.warn('Authenticated user has no profile — signing out');
+      signOut(auth).then(() => {
+        navigate('/auth', {
+          state: { error: 'No account found. Please contact Cesar Graphics for an invitation.' }
+        });
+      });
       return;
     }
 
-    // If user exists and has profile, check role requirements
+    // Generic connection error — show message but don't boot them
+    if (currentUser && firestoreError === 'error') {
+      console.warn('Firestore error loading profile');
+      setChecking(false);
+      return;
+    }
+
+    // Logged in with profile — check role if required
     if (currentUser && userProfile) {
-      // If specific role is required and user doesn't have it
       if (requireRole && userProfile.role !== requireRole) {
         console.log(`Role required: ${requireRole}, user has: ${userProfile.role}`);
         navigate('/unauthorized');
         return;
       }
-      
-      console.log('All checks passed, allowing access');
-      setChecking(false);
-      return;
-    }
-
-    // If user exists but no profile and we're not already on createProfile page
-    if (currentUser && !userProfile && window.location.pathname !== '/createProfile') {
-      console.log('User exists but no profile found, redirecting to create profile');
-      navigate('/createProfile');
-      return;
-    }
-
-    // If we have a user but still waiting for profile (not an error case)
-    if (currentUser && !userProfile && !firestoreError) {
-      console.log('User exists, waiting for profile to load...');
-      // Don't redirect immediately, give it a moment to load
-      const timeout = setTimeout(() => {
-        if (!userProfile && window.location.pathname !== '/createProfile') {
-          console.log('Profile still not loaded after timeout, redirecting to create profile');
-          navigate('/createProfile');
-        }
-      }, 3000); // Wait 3 seconds for profile to load
-
-      return () => clearTimeout(timeout);
-    }
-
-    // If we're on createProfile page and have no profile, that's fine - let them create it
-    if (currentUser && !userProfile && window.location.pathname === '/createProfile') {
-      console.log('User on createProfile page without profile - this is correct');
       setChecking(false);
       return;
     }
 
   }, [currentUser, userProfile, loading, navigate, requireRole, firestoreError]);
 
-  // Show loading spinner while checking authentication or waiting for profile
+  // Loading state
   if (loading || (checking && currentUser && !userProfile && !firestoreError)) {
-    const message = loading 
-      ? 'Checking authentication...' 
-      : 'Loading user profile...';
-      
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cesar-navy mx-auto mb-4"></div>
-          <p className="text-gray-600">{message}</p>
-          {firestoreError && (
+          <p className="text-gray-600">
+            {loading ? 'Checking authentication...' : 'Loading your profile...'}
+          </p>
+          {firestoreError === 'error' && (
             <p className="text-sm text-[#92690B] mt-2">
-              Having trouble connecting to database...
+              Having trouble connecting. Please refresh the page.
             </p>
           )}
         </div>
@@ -97,18 +76,8 @@ export default function ProtectedRoute({ children, requireRole = null }) {
     );
   }
 
-  // Only render children if user is authenticated and has proper access
-  const shouldRender = currentUser && (userProfile || firestoreError);
-  
-  if (!shouldRender) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cesar-navy mx-auto mb-4"></div>
-          <p className="text-gray-600">Preparing your dashboard...</p>
-        </div>
-      </div>
-    );
+  if (!currentUser || (!userProfile && !firestoreError)) {
+    return null;
   }
 
   return children;
