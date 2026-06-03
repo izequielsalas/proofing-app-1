@@ -36,7 +36,6 @@ function RevisionThumbnail({ proof }) {
     return <div className="w-full h-full bg-gray-200" />;
   }
 
-  // If PDF has a thumbnail, show it
   if (isPDF && proof.thumbnailUrl) {
     return (
       <img
@@ -50,7 +49,6 @@ function RevisionThumbnail({ proof }) {
     );
   }
 
-  // PDF without thumbnail — show icon
   if (isPDF) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-red-50">
@@ -59,7 +57,6 @@ function RevisionThumbnail({ proof }) {
     );
   }
 
-  // Image file
   return (
     <img
       src={proof.fileUrl}
@@ -84,7 +81,7 @@ function StackedCard({ group, onOpen }) {
       onClick={() => onOpen(latest)}
       style={{ paddingBottom: hasStack ? "14px" : 0, paddingRight: hasStack ? "14px" : 0 }}
     >
-      {/* Layer 2 — furthest back, shows oldest revision thumbnail (3+ versions only) */}
+      {/* Layer 2 — furthest back */}
       {revisionCount >= 3 && (
         <div
           className="absolute inset-0 rounded-xl border-2 border-gray-300 overflow-hidden transition-transform duration-200 ease-out group-hover:translate-x-4 group-hover:translate-y-4"
@@ -94,7 +91,7 @@ function StackedCard({ group, onOpen }) {
         </div>
       )}
 
-      {/* Layer 1 — shows the revision just behind the latest */}
+      {/* Layer 1 — just behind latest */}
       {hasStack && (
         <div
           className="absolute inset-0 rounded-xl border-2 border-gray-300 overflow-hidden transition-transform duration-200 ease-out group-hover:translate-x-2 group-hover:translate-y-2"
@@ -104,7 +101,7 @@ function StackedCard({ group, onOpen }) {
         </div>
       )}
 
-      {/* Front card — lifts on hover */}
+      {/* Front card */}
       <div
         className="relative transition-transform duration-200 ease-out group-hover:-translate-y-1 group-hover:shadow-xl"
         style={{ zIndex: 2 }}
@@ -118,6 +115,7 @@ function StackedCard({ group, onOpen }) {
           createdAt={latest.createdAt}
           revisionNumber={latest.revisionNumber}
           parentProofId={latest.parentProofId}
+          uploaderEmail={latest.uploaderEmail}
         />
       </div>
 

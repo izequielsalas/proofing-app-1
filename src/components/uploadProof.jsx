@@ -1,11 +1,11 @@
 // src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { sendInvitationEmail, sendProofReadyEmail } from '../utils/emailService';
-import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { sendInvitationEmail } from '../utils/emailService';
+import { Upload, File, X, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 
 export default function UploadProof({ onUploadComplete, revisionMode = false, parentProof = null }) {
   const [files, setFiles] = useState([]);
@@ -13,15 +13,22 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedClientLabel, setSelectedClientLabel] = useState(''); // ⭐ display name of selected client
   const [clients, setClients] = useState([]);
+  const [clientSearch, setClientSearch] = useState('');
+  const [comboOpen, setComboOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [invitingClient, setInvitingClient] = useState(false);
   const [debugLog, setDebugLog] = useState([]);
+  const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef();
-  
+  const comboRef = useRef();
+  const inputRef = useRef();
+
   const { userProfile, isAdmin, isDesigner, canAssignProofs } = useAuth();
 
   const addDebugLog = (message, type = 'info') => {
@@ -39,46 +46,27 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     }
   }, [revisionMode, parentProof]);
 
-  // ⭐ Fetch clients from BOTH users and invitations collections (only in normal mode)
+  // Fetch clients from BOTH users and invitations collections
   useEffect(() => {
     if (!revisionMode && canAssignProofs()) {
       const fetchClients = async () => {
         try {
           addDebugLog('Fetching client list from users + invitations...');
 
-          // Fetch active users (already signed up)
-          const usersQuery = query(
-            collection(db, 'users'),
-            where('role', '==', 'client')
-          );
+          const usersQuery = query(collection(db, 'users'), where('role', '==', 'client'));
           const usersSnapshot = await getDocs(usersQuery);
-          const activeClients = usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+          const activeClients = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-          // Fetch pending invitations (not yet signed up)
-          const invitationsQuery = query(
-            collection(db, 'invitations'),
-            where('status', '==', 'pending')
-          );
+          const invitationsQuery = query(collection(db, 'invitations'), where('status', '==', 'pending'));
           const invitationsSnapshot = await getDocs(invitationsQuery);
           const pendingClients = invitationsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            status: 'invited',
-            _isInvitation: true
+            id: doc.id, ...doc.data(), status: 'invited', _isInvitation: true
           }));
 
-          // Combine and deduplicate by email
           const allClients = [...activeClients];
           pendingClients.forEach(inv => {
-            const alreadyActive = activeClients.find(
-              c => c.email?.toLowerCase() === inv.email?.toLowerCase()
-            );
-            if (!alreadyActive) {
-              allClients.push(inv);
-            }
+            const alreadyActive = activeClients.find(c => c.email?.toLowerCase() === inv.email?.toLowerCase());
+            if (!alreadyActive) allClients.push(inv);
           });
 
           setClients(allClients);
@@ -92,23 +80,96 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     }
   }, [revisionMode, canAssignProofs]);
 
-  // ⭐ Invite to 'invitations' collection instead of 'users'
+  // Close combobox when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (comboRef.current && !comboRef.current.contains(e.target)) {
+        setComboOpen(false);
+        // If nothing selected, reset search to empty
+        if (!selectedClientId) setClientSearch('');
+        else setClientSearch(selectedClientLabel);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [selectedClientId, selectedClientLabel]);
+
+  // Filtered clients based on search
+  const filteredClients = useMemo(() => {
+    if (!clientSearch.trim()) return clients;
+    const q = clientSearch.toLowerCase();
+    return clients.filter(c =>
+      c.displayName?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q)
+    );
+  }, [clients, clientSearch]);
+
+  // Reset highlight when filtered list changes
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [filteredClients]);
+
+  const selectClient = (client) => {
+    setSelectedClientId(client.id);
+    const label = `${client.displayName || client.email}${(client.status === 'invited' || client._isInvitation) ? ' (Invited)' : ''}`;
+    setSelectedClientLabel(label);
+    setClientSearch(label);
+    setComboOpen(false);
+    setHighlightedIndex(-1);
+  };
+
+  const handleComboKeyDown = (e) => {
+    if (!comboOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setComboOpen(true);
+        e.preventDefault();
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.min(i + 1, filteredClients.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && filteredClients[highlightedIndex]) {
+        selectClient(filteredClients[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setComboOpen(false);
+      if (!selectedClientId) setClientSearch('');
+      else setClientSearch(selectedClientLabel);
+    }
+  };
+
+  const handleComboInput = (e) => {
+    setClientSearch(e.target.value);
+    setSelectedClientId('');
+    setSelectedClientLabel('');
+    setComboOpen(true);
+  };
+
+  const clearClient = () => {
+    setSelectedClientId('');
+    setSelectedClientLabel('');
+    setClientSearch('');
+    setComboOpen(false);
+    inputRef.current?.focus();
+  };
+
   const handleInviteClient = async () => {
     if (!clientEmail.trim() || !clientName.trim()) {
       alert('Please enter both client name and email');
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(clientEmail)) {
       alert('Please enter a valid email');
       return;
     }
-
-    const existingClient = clients.find(c => 
-      c.email?.toLowerCase() === clientEmail.toLowerCase()
-    );
-    
+    const existingClient = clients.find(c => c.email?.toLowerCase() === clientEmail.toLowerCase());
     if (existingClient) {
       alert('A client with this email already exists');
       setSelectedClientId(existingClient.id);
@@ -117,10 +178,8 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       setShowInviteForm(false);
       return;
     }
-
     setInvitingClient(true);
     addDebugLog(`Starting invitation process for ${clientEmail}`);
-
     try {
       const invitationData = {
         email: clientEmail.trim().toLowerCase(),
@@ -131,11 +190,9 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         invitedBy: auth.currentUser?.uid,
         inviterEmail: auth.currentUser?.email
       };
-
       addDebugLog('Creating invitation in Firestore (invitations collection)...');
       const invitationRef = await addDoc(collection(db, 'invitations'), invitationData);
       addDebugLog(`✅ Invitation created with ID: ${invitationRef.id}`);
-      
       addDebugLog('🔄 Sending invitation email...');
       try {
         await sendInvitationEmail(clientEmail, clientName, auth.currentUser?.email);
@@ -143,23 +200,14 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       } catch (emailError) {
         addDebugLog(`❌ Invitation email failed: ${emailError.message}`, 'error');
       }
-
-      const newClient = { 
-        id: invitationRef.id,
-        ...invitationData,
-        status: 'invited',
-        _isInvitation: true
-      };
+      const newClient = { id: invitationRef.id, ...invitationData, status: 'invited', _isInvitation: true };
       setClients(prev => [...prev, newClient]);
-      setSelectedClientId(invitationRef.id);
-      
+      selectClient(newClient);
       setClientEmail('');
       setClientName('');
       setShowInviteForm(false);
-      
       addDebugLog(`🎉 Client invitation complete for ${clientName}`);
       alert(`Invitation sent to ${clientName}!`);
-
     } catch (error) {
       console.error('Error inviting client:', error);
       addDebugLog(`❌ Error: ${error.message}`, 'error');
@@ -183,24 +231,17 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
-    
     const validFiles = selectedFiles.filter(file => {
-      const isValid = file.type === 'application/pdf' || file.type.startsWith('image/');
-      if (!isValid) {
-        alert(`${file.name} is not a valid file type. Please upload PDF or image files only.`);
-      }
+      const extension = file.name.split('.').pop().toLowerCase();
+      const isValid = file.type === 'application/pdf' || extension === 'pdf';
+      if (!isValid) setUploadError(`${file.name} is not a valid file type. Only PDF files are accepted.`);
       return isValid;
     });
-
     const validSizedFiles = validFiles.filter(file => {
-      const isValidSize = file.size <= 10 * 1024 * 1024;
-      if (!isValidSize) {
-        alert(`${file.name} is too large. Please upload files smaller than 10MB.`);
-      }
+      const isValidSize = file.size <= 24 * 1024 * 1024;
+      if (!isValidSize) setUploadError(`${file.name} is too large. Maximum file size is 24MB.`);
       return isValidSize;
     });
-
-    // In revision mode, only allow one file
     if (revisionMode) {
       setFiles([validSizedFiles[0]].filter(Boolean));
     } else {
@@ -211,41 +252,32 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   const uploadFiles = async () => {
     if (files.length === 0) return alert('Please select at least one file');
     if (!projectTitle.trim()) return alert('Please enter a project title');
-    
     if (!revisionMode && canAssignProofs() && !selectedClientId) {
       return alert('Please select a client or invite a new one');
     }
 
     setUploading(true);
     setDebugLog([]);
+    setUploadError(null);
     addDebugLog(revisionMode ? '🔄 Starting revision upload...' : '🚀 Starting proof upload process...');
-    
+
     const user = auth.currentUser;
 
     try {
-      const selectedClient = revisionMode
-        ? null
-        : clients.find(c => c.id === selectedClientId);
+      const selectedClient = revisionMode ? null : clients.find(c => c.id === selectedClientId);
 
       if (!revisionMode) {
         addDebugLog(`Selected client: ${selectedClient?.displayName} (${selectedClient?.email})`);
         addDebugLog(`Client status: ${selectedClient?.status}${selectedClient?._isInvitation ? ' [from invitations collection]' : ''}`);
       }
 
-      // ── Revision chain setup ──
       let chainId = null;
       let nextRevisionNumber = 1;
 
       if (revisionMode && parentProof) {
         chainId = parentProof.revisionChainId || parentProof.id;
-
-        // Query the full chain to get the actual max revision number
-        const chainSnapshot = await getDocs(
-          query(collection(db, 'proofs'), where('revisionChainId', '==', chainId))
-        );
-        const maxRevision = chainSnapshot.docs.reduce((max, d) => {
-          return Math.max(max, d.data().revisionNumber || 1);
-        }, 1);
+        const chainSnapshot = await getDocs(query(collection(db, 'proofs'), where('revisionChainId', '==', chainId)));
+        const maxRevision = chainSnapshot.docs.reduce((max, d) => Math.max(max, d.data().revisionNumber || 1), 1);
         nextRevisionNumber = maxRevision + 1;
         addDebugLog(`📎 Chain: ${chainId} | Next version: v${nextRevisionNumber}`);
       }
@@ -253,22 +285,16 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         addDebugLog(`📁 Uploading file ${i + 1}/${files.length}: ${file.name}`);
-        
-        setUploadProgress(prev => ({
-          ...prev,
-          [i]: { status: 'uploading', progress: 0 }
-        }));
-        
+        setUploadProgress(prev => ({ ...prev, [i]: { status: 'uploading', progress: 0 } }));
+
         const timestamp = Date.now();
         const fileName = `${timestamp}_${file.name}`;
         const fileRef = ref(storage, `proofFiles/${fileName}`);
-        
         await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(fileRef);
         addDebugLog(`✅ File uploaded to storage: ${fileName}`);
 
         const proofData = revisionMode ? {
-          // ── Revision proof — inherits all client info from parent ──
           title: parentProof.title,
           clientName: parentProof.clientName,
           clientId: parentProof.clientId,
@@ -284,12 +310,10 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           uploaderEmail: user?.email,
           createdAt: serverTimestamp(),
           assignedAt: new Date(),
-          // ⭐ Revision-specific fields
           parentProofId: parentProof.id,
           revisionChainId: chainId,
           revisionNumber: nextRevisionNumber,
         } : {
-          // ── New proof ──
           title: projectTitle.trim(),
           clientName: selectedClient?.displayName || selectedClient?.email,
           clientId: selectedClientId,
@@ -305,7 +329,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           uploaderEmail: user?.email,
           createdAt: serverTimestamp(),
           assignedAt: new Date(),
-          // ⭐ Original proof fields (revisionChainId set after addDoc)
           parentProofId: null,
           revisionNumber: 1,
         };
@@ -313,7 +336,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         addDebugLog(`📝 Creating proof document in Firestore...`);
         const docRef = await addDoc(collection(db, 'proofs'), proofData);
 
-        // For new proofs, set revisionChainId = its own doc ID
         if (!revisionMode) {
           await updateDoc(doc(db, 'proofs', docRef.id), { revisionChainId: docRef.id });
           addDebugLog(`✅ New proof created — chain ID: ${docRef.id}`);
@@ -321,54 +343,30 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           addDebugLog(`✅ Revision v${nextRevisionNumber} created — doc ID: ${docRef.id}`);
         }
 
-        setUploadProgress(prev => ({
-          ...prev,
-          [i]: { status: 'complete', progress: 100 }
-        }));
+        setUploadProgress(prev => ({ ...prev, [i]: { status: 'complete', progress: 100 } }));
       }
 
-      // Email notifications (only for new proofs, not revisions)
-      if (!revisionMode) {
-        if (selectedClient?.status === 'invited' || selectedClient?._isInvitation) {
-          addDebugLog('🔄 Client is invited - sending proof ready notification...');
-          try {
-            await sendProofReadyEmail(
-              selectedClient.email, 
-              selectedClient.displayName, 
-              projectTitle
-            );
-            addDebugLog(`✅ Proof ready notification sent!`);
-          } catch (emailError) {
-            addDebugLog(`❌ Proof ready notification failed: ${emailError.message}`, 'error');
-            console.error('Proof ready notification error:', emailError);
-          }
-        } else {
-          addDebugLog('ℹ️ Client is active - automatic notification will be sent by Firebase Function');
-        }
-      }
+      // ⭐ FIXED: removed frontend email call — handleNewProof Cloud Function handles all notifications
 
-      // Reset form
       setFiles([]);
       setProjectTitle('');
       setSelectedClientId('');
+      setSelectedClientLabel('');
+      setClientSearch('');
       setNotes('');
       setUploadProgress({});
       if (fileInputRef.current) fileInputRef.current.value = '';
-      
+
       addDebugLog('🎉 Upload completed successfully!');
       onUploadComplete?.();
-      
+
     } catch (error) {
       console.error('Upload error:', error);
       addDebugLog(`❌ Upload failed: ${error.message}`, 'error');
-      alert('Upload failed. Please try again.');
-      
+      setUploadError('Upload failed. Please try again. Check the debug log for details.');
       files.forEach((_, i) => {
         if (!uploadProgress[i] || uploadProgress[i].status === 'uploading') {
-          setUploadProgress(prev => ({
-            ...prev,
-            [i]: { status: 'error', progress: 0 }
-          }));
+          setUploadProgress(prev => ({ ...prev, [i]: { status: 'error', progress: 0 } }));
         }
       });
     } finally {
@@ -378,16 +376,24 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
 
   return (
     <div className="space-y-6">
+      {/* Error Toast */}
+      {uploadError && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+          <p className="text-sm text-red-700 flex-1">{uploadError}</p>
+          <button onClick={() => setUploadError(null)} className="p-1 hover:bg-red-100 rounded">
+            <X className="h-4 w-4 text-red-500" />
+          </button>
+        </div>
+      )}
+
       {/* Debug Panel */}
       {debugLog.length > 0 && (
         <div className="bg-gray-100 border rounded-lg p-4">
           <h3 className="font-bold text-gray-900 mb-2">🔍 Debug Log:</h3>
           <div className="text-xs font-mono space-y-1 max-h-40 overflow-y-auto">
             {debugLog.map((log, index) => (
-              <div 
-                key={index} 
-                className={`${log.type === 'error' ? 'text-red-700' : 'text-gray-700'}`}
-              >
+              <div key={index} className={`${log.type === 'error' ? 'text-red-700' : 'text-gray-700'}`}>
                 {log.message}
               </div>
             ))}
@@ -406,14 +412,12 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         ) : (
           <>
             <h3 className="text-lg font-medium text-gray-900">Upload New Proof</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Upload files for client review and approval
-            </p>
+            <p className="text-sm text-gray-600 mt-1">Upload files for client review and approval</p>
           </>
         )}
       </div>
 
-      {/* Project Title — read-only in revision mode */}
+      {/* Project Title */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Project Title {!revisionMode && '*'}
@@ -431,13 +435,11 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         )}
       </div>
 
-      {/* Client Assignment — only shown in normal mode */}
+      {/* Client Assignment — combobox */}
       {!revisionMode && canAssignProofs() && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Assign to Client *
-            </label>
+            <label className="block text-sm font-medium text-gray-700">Assign to Client *</label>
             <button
               type="button"
               onClick={() => setShowInviteForm(!showInviteForm)}
@@ -447,26 +449,71 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
               + Invite New Client
             </button>
           </div>
-          
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
-            disabled={uploading}
-          >
-            <option value="">Select a client...</option>
-            {clients.map(client => (
-              <option key={client.id} value={client.id}>
-                {client.displayName || client.email}
-                {(client.status === 'invited' || client._isInvitation) && ' (Invited)'}
-              </option>
-            ))}
-          </select>
+
+          {/* ⭐ Combobox */}
+          <div ref={comboRef} className="relative">
+            <div className="relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={clientSearch}
+                onChange={handleComboInput}
+                onFocus={() => setComboOpen(true)}
+                onKeyDown={handleComboKeyDown}
+                placeholder="Search or select a client..."
+                disabled={uploading}
+                className="w-full p-3 pr-16 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy disabled:bg-gray-50 disabled:text-gray-500"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {selectedClientId && (
+                  <button type="button" onClick={clearClient} className="p-1 hover:bg-gray-100 rounded">
+                    <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                  </button>
+                )}
+                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-150 ${comboOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </div>
+
+            {/* Dropdown list */}
+            {comboOpen && (
+              <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {filteredClients.length > 0 ? (
+                  filteredClients.map((client, index) => (
+                    <li
+                      key={client.id}
+                      onMouseDown={() => selectClient(client)}
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      className={`px-4 py-2.5 cursor-pointer text-sm ${
+                        index === highlightedIndex
+                          ? 'bg-cesar-navy text-white'
+                          : 'text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="font-medium">{client.displayName || client.email}</span>
+                      {client.displayName && (
+                        <span className={`ml-2 text-xs ${index === highlightedIndex ? 'text-blue-200' : 'text-gray-400'}`}>
+                          {client.email}
+                        </span>
+                      )}
+                      {(client.status === 'invited' || client._isInvitation) && (
+                        <span className={`ml-2 text-xs ${index === highlightedIndex ? 'text-blue-200' : 'text-gray-400'}`}>
+                          · Invited
+                        </span>
+                      )}
+                    </li>
+                  ))
+                ) : (
+                  <li className="px-4 py-3 text-sm text-gray-500">
+                    No clients match "{clientSearch}"
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
 
           {showInviteForm && (
             <div className="mt-4 p-4 bg-[#E0EAF5] border border-cesar-navy/20 rounded-lg">
               <h4 className="text-sm font-medium text-cesar-navy mb-3">Invite New Client</h4>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <input
                   type="text"
@@ -485,7 +532,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                   disabled={invitingClient}
                 />
               </div>
-              
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -497,11 +543,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowInviteForm(false);
-                    setClientName('');
-                    setClientEmail('');
-                  }}
+                  onClick={() => { setShowInviteForm(false); setClientName(''); setClientEmail(''); }}
                   disabled={invitingClient}
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm"
                 >
@@ -521,10 +563,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder={revisionMode
-            ? "Describe what changed in this revision..."
-            : "Any special instructions or notes for this proof..."
-          }
+          placeholder={revisionMode ? "Describe what changed in this revision..." : "Any special instructions or notes for this proof..."}
           rows={3}
           className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy resize-none"
           disabled={uploading}
@@ -535,25 +574,20 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-cesar-navy/40 transition-colors">
         <input
           type="file"
-          accept="application/pdf,image/*"
+          accept="application/pdf"
           multiple={!revisionMode}
           ref={fileInputRef}
           onChange={handleFileSelect}
           className="hidden"
           disabled={uploading}
         />
-        
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <p className="text-lg font-medium text-gray-900 mb-2">
           {revisionMode ? 'Upload revised file' : 'Drop files here or click to browse'}
         </p>
         <p className="text-sm text-gray-600 mb-4">
-          {revisionMode
-            ? 'Upload one PDF or image file (replaces previous version)'
-            : 'Supports PDF and image files up to 10MB each'
-          }
+          {revisionMode ? 'Upload one PDF file (replaces previous version)' : 'Supports PDF files up to 24MB'}
         </p>
-        
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -582,7 +616,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                       </p>
                     </div>
                   </div>
-                  
                   <div className="flex items-center gap-2">
                     {progress?.status === 'uploading' && (
                       <div className="flex items-center gap-2">
@@ -590,17 +623,10 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                         <span className="text-xs text-gray-600">Uploading...</span>
                       </div>
                     )}
-                    {progress?.status === 'complete' && (
-                      <CheckCircle className="h-5 w-5 text-cesar-green" />
-                    )}
-                    {progress?.status === 'error' && (
-                      <AlertCircle className="h-5 w-5 text-cesar-magenta" />
-                    )}
+                    {progress?.status === 'complete' && <CheckCircle className="h-5 w-5 text-cesar-green" />}
+                    {progress?.status === 'error' && <AlertCircle className="h-5 w-5 text-cesar-magenta" />}
                     {!progress && !uploading && (
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="p-1 hover:bg-gray-200 rounded transition-colors"
-                      >
+                      <button onClick={() => removeFile(index)} className="p-1 hover:bg-gray-200 rounded transition-colors">
                         <X className="h-4 w-4 text-gray-500" />
                       </button>
                     )}
@@ -613,15 +639,17 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       )}
 
       {/* Upload Button */}
-      {files.length > 0 && (
-        <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-4">
+        {uploadError && (
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+            <p className="text-sm text-red-600">{uploadError}</p>
+          </div>
+        )}
+        {files.length > 0 && (
           <button
             onClick={uploadFiles}
-            disabled={
-              uploading ||
-              !projectTitle.trim() ||
-              (!revisionMode && canAssignProofs() && !selectedClientId)
-            }
+            disabled={uploading || !projectTitle.trim() || (!revisionMode && canAssignProofs() && !selectedClientId)}
             className="px-6 py-3 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading
@@ -631,8 +659,8 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                 : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`
             }
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

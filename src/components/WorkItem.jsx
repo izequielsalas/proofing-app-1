@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck } from "lucide-react";
 
-export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId }) {
+export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail }) {
   const isPDF = fileUrl?.toLowerCase().includes('.pdf');
 
   const getStatusColor = () => {
@@ -56,19 +56,16 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
       <div className="relative aspect-[11/8.5] bg-gray-100 overflow-hidden">
         {isPDF ? (
           thumbnailUrl ? (
-            // Show generated thumbnail if available
             <img
               src={thumbnailUrl}
               alt={title}
               className="w-full h-full object-cover"
               onError={(e) => {
-                // If thumbnail fails to load, fall back to PDF icon
                 e.target.style.display = 'none';
                 e.target.nextElementSibling.style.display = 'flex';
               }}
             />
           ) : (
-            // No thumbnail yet — show PDF icon placeholder
             <div className="w-full h-full flex items-center justify-center bg-red-50">
               <div className="text-center">
                 <FileText className="w-12 h-12 text-red-600 mx-auto mb-2" />
@@ -116,6 +113,14 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 flex-shrink-0" />
               <span className="truncate">{clientName}</span>
+            </div>
+          )}
+
+          {/* ⭐ NEW: Show uploader email */}
+          {uploaderEmail && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0 text-gray-400" />
+              <span className="truncate text-gray-500">By: {uploaderEmail}</span>
             </div>
           )}
 
