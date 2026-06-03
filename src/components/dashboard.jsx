@@ -7,7 +7,7 @@ import { db, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import ProofGrid from './ProofGrid';
 import UploadProof from './uploadProof';
-import { Search, Filter, Upload, Users, LogOut, ArrowUpDown } from 'lucide-react';
+import { Search, Filter, Upload, Users, LogOut, ArrowUpDown, FileText } from 'lucide-react';
 
 // ─── Chain helpers ────────────────────────────────────────────────────────────
 // Groups a flat proof list into revision chains and returns one representative
@@ -222,6 +222,12 @@ export default function Dashboard() {
                 <Link to="/admin/users" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
                   <Users size={16} />
                   Manage Users
+                </Link>
+              )}
+              {isAdmin() && (
+                <Link to="/admin/proofs" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+                  <FileText size={16} />
+                  Manage Proofs
                 </Link>
               )}
               <div className="text-right">

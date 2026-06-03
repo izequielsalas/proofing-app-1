@@ -9,6 +9,7 @@ import UserManagement from './components/UserManagement';
 import UnauthorizedPage from './components/UnauthorizedPage';
 import PrivateBrowsingNotice from './components/PrivateBrowsingNotice';
 import AcceptInvitation from './components/AcceptInvitation';
+import AdminProofs from './components/AdminProofs';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/gallery" element={<ProtectedRoute><ImageGallery /></ProtectedRoute>} />
             <Route path="/proof/:id" element={<ProtectedRoute><ProofViewer /></ProtectedRoute>} />
+            <Route path="/admin/proofs" element={<ProtectedRoute><AdminProofs /></ProtectedRoute>} />
 
             {/* Admin routes */}
             <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
