@@ -667,39 +667,23 @@ exports.generatePdfThumbnail = onObjectFinalized(
 
       console.log("✅ Thumbnail saved:", thumbnailUrl);
 
-      // Find the matching proof doc in Firestore and update it
-      // fileUrl contains the full Storage URL with the filename embedded,
-      // so we search using the original filePath which is part of the URL
-      const encodedPath = encodeURIComponent(filePath);
-      const proofsQuery = await db.collection("proofs")
-        .where("fileUrl", ">=", encodedPath)
-        .where("fileUrl", "<=", encodedPath + "\uf8ff")
-        .get();
+    // ⭐ FIXED: query by fileName field directly — reliable, no URL encoding issues
+    const storageFileName = filePath.split("/").pop(); // e.g. "1778269405239_proof.pdf"
 
-      if (!proofsQuery.empty) {
-        const proofDoc = proofsQuery.docs[0];
-        await proofDoc.ref.update({ thumbnailUrl });
-        console.log("✅ Proof doc updated with thumbnailUrl:", proofDoc.id);
-      } else {
-        // Fallback: try matching by filename substring against all recent proofs
-        console.log("⚠️ Range query missed, trying fallback match for:", fileName);
-        const recentProofs = await db.collection("proofs")
-          .orderBy("createdAt", "desc")
-          .limit(20)
-          .get();
+    console.log("🔍 Looking for proof with fileName:", storageFileName);
 
-        const match = recentProofs.docs.find(doc => {
-          const url = doc.data().fileUrl || "";
-          return url.includes(fileName);
-        });
+    const proofsQuery = await db.collection("proofs")
+      .where("fileName", "==", storageFileName)
+      .limit(1)
+      .get();
 
-        if (match) {
-          await match.ref.update({ thumbnailUrl });
-          console.log("✅ Proof doc updated via fallback match:", match.id);
-        } else {
-          console.log("⚠️ No matching proof doc found for:", fileName);
-        }
-      }
+    if (!proofsQuery.empty) {
+      const proofDoc = proofsQuery.docs[0];
+      await proofDoc.ref.update({ thumbnailUrl });
+      console.log("✅ Proof doc updated with thumbnailUrl:", proofDoc.id);
+    } else {
+      console.log("⚠️ No proof found with fileName:", storageFileName);
+    }
 
     } catch (error) {
       console.error("❌ Error generating thumbnail:", error);

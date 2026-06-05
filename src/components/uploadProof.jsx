@@ -301,7 +301,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           clientEmail: parentProof.clientEmail,
           clientStatus: parentProof.clientStatus || 'active',
           fileUrl: downloadURL,
-          fileName: file.name,
+          fileName: fileName, // ⭐ FIXED: full timestamped name for thumbnail matching
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
@@ -320,7 +320,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           clientEmail: selectedClient?.email,
           clientStatus: selectedClient?.status || 'active',
           fileUrl: downloadURL,
-          fileName: file.name,
+          fileName: fileName, // ⭐ FIXED: full timestamped name for thumbnail matching
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
