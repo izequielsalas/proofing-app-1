@@ -28,8 +28,8 @@ export default function Modal({ project, onClose }) {
   const [revisionHistory, setRevisionHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [historyError, setHistoryError] = useState(null); // ⭐ NEW: surface history errors
 
-  // Determine the revision chain ID (for fetching all related versions)
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
   const currentRevisionNumber = project.revisionNumber || 1;
@@ -43,15 +43,14 @@ export default function Modal({ project, onClose }) {
     };
   }, []);
 
-  // Load revision history when modal opens or when history is toggled
+  // ⭐ FIXED: Load revision history automatically on modal open (not on toggle)
   useEffect(() => {
-    if (showHistory && !loadingHistory && revisionHistory.length === 0) {
-      loadRevisionHistory();
-    }
-  }, [showHistory]);
+    loadRevisionHistory();
+  }, []);
 
   const loadRevisionHistory = async () => {
     setLoadingHistory(true);
+    setHistoryError(null);
     try {
       const q = query(
         collection(db, "proofs"),
@@ -66,7 +65,11 @@ export default function Modal({ project, onClose }) {
       
       setRevisionHistory(history);
     } catch (error) {
+      // ⭐ FIXED: surface error instead of silently swallowing it
       console.error("Error loading revision history:", error);
+      console.error("Chain ID attempted:", revisionChainId);
+      console.error("Full error:", JSON.stringify(error));
+      setHistoryError(error.message);
     } finally {
       setLoadingHistory(false);
     }
@@ -90,18 +93,14 @@ export default function Modal({ project, onClose }) {
   };
 
   const handleDecline = async () => {
-    // Step 1: show the comment box if not already visible
     if (!showCommentBox) {
       setShowCommentBox(true);
       return;
     }
-
-    // Step 2: enforce that a comment was actually entered
     if (notes.trim() === "") {
       setDeclineError("Please explain why you're declining before submitting.");
       return;
     }
-
     setDeclineError("");
     setIsLoading(true);
     try {
@@ -119,7 +118,6 @@ export default function Modal({ project, onClose }) {
     }
   };
 
-  // Production status advance handlers
   const handleAdvanceStatus = async (newStatus) => {
     setIsLoading(true);
     try {
@@ -136,7 +134,6 @@ export default function Modal({ project, onClose }) {
     }
   };
 
-  // Clear error when user starts typing
   const handleNotesChange = (e) => {
     setNotes(e.target.value);
     if (declineError) setDeclineError("");
@@ -177,6 +174,10 @@ export default function Modal({ project, onClose }) {
     }
   };
 
+  // ⭐ FIXED: show history section for any proof that has or might have revisions
+  const hasRevisionHistory = revisionHistory.length > 0;
+  const showRevisionSection = hasRevisionHistory || isRevision || loadingHistory;
+
   return (
     <motion.div
       className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-hidden"
@@ -194,14 +195,13 @@ export default function Modal({ project, onClose }) {
         exit={{ scale: 0.9, opacity: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {/* Header — fixed, never scrolls */}
+        {/* Header */}
         <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-center rounded-t-xl flex-shrink-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-2xl font-bold text-gray-900">
               {project.title || `Proof #${project.id?.slice(-6)}`}
             </h2>
             
-            {/* Revision Badge */}
             {isRevision && (
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#E0EAF5] text-cesar-navy border border-cesar-navy/30 flex items-center gap-1">
                 <GitBranch className="w-4 h-4" />
@@ -209,7 +209,6 @@ export default function Modal({ project, onClose }) {
               </span>
             )}
             
-            {/* Status Badge */}
             <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(project.status)}`}>
               {getStatusLabel(project.status)}
             </span>
@@ -222,11 +221,11 @@ export default function Modal({ project, onClose }) {
           </button>
         </div>
 
-        {/* Scrollable content area */}
+        {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto p-6">
 
-          {/* Revision History Toggle */}
-          {(isRevision || revisionHistory.length > 0 || loadingHistory) && (
+          {/* ⭐ FIXED: Revision History — shows for any proof with revisions, not just revisions themselves */}
+          {showRevisionSection && (
             <div className="mb-6">
               <button
                 onClick={() => setShowHistory(!showHistory)}
@@ -234,6 +233,11 @@ export default function Modal({ project, onClose }) {
               >
                 <GitBranch className="w-4 h-4" />
                 {showHistory ? 'Hide' : 'Show'} Revision History
+                {hasRevisionHistory && (
+                  <span className="px-1.5 py-0.5 bg-cesar-navy text-white text-xs rounded-full">
+                    {revisionHistory.length}
+                  </span>
+                )}
                 {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
@@ -241,6 +245,10 @@ export default function Modal({ project, onClose }) {
                 <div className="mt-4 space-y-2">
                   {loadingHistory ? (
                     <div className="text-sm text-gray-500 p-3">Loading history...</div>
+                  ) : historyError ? (
+                    <div className="text-sm text-red-600 p-3 bg-red-50 rounded-lg">
+                      Could not load revision history: {historyError}
+                    </div>
                   ) : revisionHistory.length === 0 ? (
                     <div className="text-sm text-gray-500 p-3">No previous revisions</div>
                   ) : (
@@ -284,11 +292,11 @@ export default function Modal({ project, onClose }) {
           {/* File Display */}
           <div className="mb-6">
             {isPDF ? (
-          <iframe
-            src={`https://docs.google.com/viewer?url=${encodeURIComponent(project.fileUrl)}&embedded=true`}
-            className="w-full h-[500px] rounded-lg border shadow-sm"
-            title={`proof-${project.id}`}
-          />
+              <iframe
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(project.fileUrl)}&embedded=true`}
+                className="w-full h-[500px] rounded-lg border shadow-sm"
+                title={`proof-${project.id}`}
+              />
             ) : (
               <img
                 src={project.fileUrl}
@@ -369,7 +377,7 @@ export default function Modal({ project, onClose }) {
             </div>
           )}
 
-          {/* Production Status Banner — shown for in_production, in_quality_control, completed */}
+          {/* Production Status Banner */}
           {['in_production', 'in_quality_control', 'completed'].includes(project.status) && (
             <div className={`mb-6 p-4 rounded-lg border ${
               project.status === 'completed'
@@ -417,7 +425,6 @@ export default function Modal({ project, onClose }) {
                     </p>
                   </div>
                 </div>
-                
                 <button
                   onClick={() => setShowUploadRevision(!showUploadRevision)}
                   className="flex items-center gap-2 px-4 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors text-sm font-medium"
@@ -443,7 +450,7 @@ export default function Modal({ project, onClose }) {
           )}
         </div>
 
-        {/* Actions — fixed at bottom, never scrolls */}
+        {/* Actions */}
         <div className="border-t border-gray-200 p-6 flex gap-3 rounded-b-xl bg-white flex-shrink-0 flex-wrap">
           <a
             href={project.fileUrl}
@@ -478,7 +485,6 @@ export default function Modal({ project, onClose }) {
             </>
           )}
 
-          {/* Production workflow buttons — admin and designer only */}
           {hasPermission('canUploadProofs') && (
             <>
               {project.status === 'approved' && (
