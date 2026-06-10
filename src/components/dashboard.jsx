@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import ProofGrid from './ProofGrid';
@@ -10,8 +10,6 @@ import UploadProof from './uploadProof';
 import { Search, Filter, Upload, Users, LogOut, ArrowUpDown, FileText } from 'lucide-react';
 
 // ─── Chain helpers ────────────────────────────────────────────────────────────
-// Groups a flat proof list into revision chains and returns one representative
-// object per job (the latest revision in each chain).
 function buildChains(proofs) {
   const chainMap = new Map();
 
@@ -21,7 +19,6 @@ function buildChains(proofs) {
     chainMap.get(key).push(proof);
   });
 
-  // Sort each group newest-first so index 0 is always the latest revision
   chainMap.forEach((group) => {
     group.sort((a, b) => {
       const aRev = a.revisionNumber ?? 0;
@@ -36,7 +33,6 @@ function buildChains(proofs) {
   return Array.from(chainMap.values());
 }
 
-// Stats count chains, not raw docs. Each chain's status = latest revision's status.
 const calcStats = (chains) =>
   chains.reduce(
     (acc, group) => {
@@ -48,8 +44,10 @@ const calcStats = (chains) =>
     { pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 }
   );
 
+const KNOWN_ROLES = ['admin', 'designer', 'client', 'production'];
+
 export default function Dashboard() {
-  const [proofs, setProofs] = useState([]);   // raw flat list from Firestore
+  const [proofs, setProofs] = useState([]);
   const [filter, setFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,7 +58,7 @@ export default function Dashboard() {
   const [uploadedProofs, setUploadedProofs] = useState([]);
   const [assignedProofs, setAssignedProofs] = useState([]);
 
-  // ─── Firestore listeners (unchanged) ────────────────────────────────────────
+  // ─── Firestore listeners ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser || !userProfile) return;
 
@@ -83,6 +81,11 @@ export default function Dashboard() {
       return unsub;
 
     } else if (isDesigner()) {
+        // Guard: if uid is missing the where() call will throw
+      if (!userProfile.uid) {
+        console.warn('Designer profile is missing uid — cannot load proofs');
+        return;
+      }
       const unsubscribers = [];
       const uploadedQuery = query(collection(db, 'proofs'), where('uploadedBy', '==', userProfile.uid));
       const unsubUploaded = onSnapshot(uploadedQuery, (snapshot) => {
@@ -98,7 +101,7 @@ export default function Dashboard() {
     }
   }, [currentUser, userProfile, isAdmin, isClient, isDesigner]);
 
-  // ─── Combine designer proofs (unchanged) ────────────────────────────────────
+  // ─── Combine designer proofs ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isDesigner()) return;
     const combined = [...uploadedProofs];
@@ -114,25 +117,17 @@ export default function Dashboard() {
   }, [uploadedProofs, assignedProofs, isDesigner]);
 
   // ─── Chain-aware derived state ───────────────────────────────────────────────
-  // All chains — recalculated only when raw proofs change
   const allChains = useMemo(() => buildChains(proofs), [proofs]);
 
-  // Stats count chains, not raw docs
   useEffect(() => {
     setStats(calcStats(allChains));
   }, [allChains]);
 
-  // Filtered chains — status filter matches latest revision; search matches ANY
-  // revision in the chain (title, clientName, or id)
   const filteredChains = useMemo(() => {
     return allChains
       .filter((group) => {
         const latest = group[0];
-
-        // Status: match against the latest revision's status
         const matchesFilter = filter === 'all' || latest.status === filter;
-
-        // Search: match against any revision in the chain
         const matchesSearch =
           searchTerm === '' ||
           group.some((proof) => {
@@ -143,19 +138,15 @@ export default function Dashboard() {
               proof.clientName?.toLowerCase().includes(term)
             );
           });
-
         return matchesFilter && matchesSearch;
       })
       .sort((a, b) => {
-        // Sort by the latest revision's createdAt
         const aTime = a[0].createdAt?.toDate?.() || new Date(0);
         const bTime = b[0].createdAt?.toDate?.() || new Date(0);
         return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
       });
   }, [allChains, filter, searchTerm, sortOrder]);
 
-  // Flatten back to a raw proof list for ProofGrid — it does its own grouping
-  // internally, so we just need all the relevant docs in there.
   const filteredProofs = useMemo(
     () => filteredChains.flat(),
     [filteredChains]
@@ -170,6 +161,7 @@ export default function Dashboard() {
     switch (userProfile?.role) {
       case 'admin': return 'Administrator';
       case 'designer': return 'Designer';
+      case 'production': return 'Production';
       case 'client': return 'Client';
       default: return 'User';
     }
@@ -197,6 +189,9 @@ export default function Dashboard() {
     );
   };
 
+  // ─── Guards ──────────────────────────────────────────────────────────────────
+
+  // Still loading profile
   if (!currentUser || !userProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -206,6 +201,11 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  // Unknown role or deactivated account — redirect to unauthorized page
+  if (!KNOWN_ROLES.includes(userProfile.role) || userProfile.isActive === false) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return (
@@ -247,7 +247,7 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        {/* Stats Cards — counts are now per-job, not per-revision */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
           <div
             onClick={() => setFilter('all')}
@@ -273,7 +273,7 @@ export default function Dashboard() {
           <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-cesar-magenta"  bgColor="bg-[#FCE4EC]"   borderColor="border-cesar-magenta" />
           <StatCard label="In Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
           <StatCard label="In QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
-          <StatCard label="Completed" value={stats.completed} filterKey="completed" iconColor="bg-[#0099CC]" bgColor="bg-[#D6F0FF]" borderColor="border-[#0099CC]" />
+          <StatCard label="Completed"     value={stats.completed}          filterKey="completed"          iconColor="bg-[#0099CC]"      bgColor="bg-[#D6F0FF]"   borderColor="border-[#0099CC]" />
         </div>
 
         {/* Controls */}
@@ -351,7 +351,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Results count — jobs language, not proofs */}
+        {/* Results count */}
         <div className="mb-4">
           <p className="text-sm text-gray-600">
             Showing {filteredChains.length} of {stats.total} {stats.total === 1 ? 'job' : 'jobs'}

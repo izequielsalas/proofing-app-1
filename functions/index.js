@@ -2,8 +2,9 @@ const { onCall, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { getAuth } = require("firebase-admin/auth");
 const { defineSecret } = require("firebase-functions/params");
 const Resend = require("resend").Resend;
 
@@ -20,7 +21,6 @@ const FRONTEND_URL = 'https://proofingapp1.web.app';
 
 // =============================================================================
 // GODADDY-SAFE EMAIL TEMPLATES
-// Simplified HTML with minimal styling to pass GoDaddy's content filters
 // =============================================================================
 
 const getSimpleInvitationTemplate = (data) => {
@@ -33,8 +33,8 @@ const getSimpleInvitationTemplate = (data) => {
     proofs = []
   } = data;
 
-  const proofsList = hasPendingProofs && proofs.length > 0 
-    ? proofs.map(proof => `• ${proof.title || 'Untitled Proof'}`).join('<br>') 
+  const proofsList = hasPendingProofs && proofs.length > 0
+    ? proofs.map(proof => `• ${proof.title || 'Untitled Proof'}`).join('<br>')
     : '';
 
   return `<!DOCTYPE html>
@@ -45,36 +45,25 @@ const getSimpleInvitationTemplate = (data) => {
 </head>
 <body style="margin:0; padding:0; font-family:Arial,sans-serif; background-color:#f5f5f5;">
   <div style="max-width:600px; margin:20px auto; background-color:#ffffff; padding:30px; border-radius:8px;">
-    
-    <!-- Header -->
     <div style="text-align:center; margin-bottom:30px;">
       <h1 style="color:#1a1a1a; font-size:24px; margin:0;">Cesar Graphics</h1>
       <p style="color:#666666; font-size:14px; margin:10px 0 0 0;">Your Local Print Shop</p>
     </div>
-
-    <!-- Main Content -->
     <div style="color:#333333; font-size:16px; line-height:1.6;">
       <p>Hi ${clientName},</p>
-      
       <p>You've been invited to access Cesar Graphics' proofing portal${inviterEmail ? ` by ${inviterEmail}` : ''}.</p>
-      
       ${hasPendingProofs ? `
       <p><strong>You have ${proofCount} proof${proofCount > 1 ? 's' : ''} waiting for your review:</strong></p>
       <div style="background-color:#f9f9f9; padding:15px; margin:15px 0; border-radius:4px;">
         ${proofsList}
       </div>
       ` : ''}
-      
       <p><strong>Get started here:</strong><br>
       <a href="${inviteUrl}" style="color:#0066cc; text-decoration:none;">${inviteUrl}</a></p>
-      
       <p style="margin-top:30px;">Questions? Just reply to this email.</p>
-      
       <p style="margin-top:20px;">Best regards,<br>
       <strong>The Cesar Graphics Team</strong></p>
     </div>
-
-    <!-- Footer -->
     <div style="margin-top:40px; padding-top:20px; border-top:1px solid #e5e5e5; text-align:center; color:#999999; font-size:12px;">
       <p style="margin:5px 0;">You're receiving this because you've been invited to collaborate on a project.</p>
     </div>
@@ -84,11 +73,7 @@ const getSimpleInvitationTemplate = (data) => {
 };
 
 const getSimpleProofNotificationTemplate = (data) => {
-  const {
-    clientName,
-    title,
-    loginUrl
-  } = data;
+  const { clientName, title, loginUrl } = data;
 
   return `<!DOCTYPE html>
 <html>
@@ -98,32 +83,20 @@ const getSimpleProofNotificationTemplate = (data) => {
 </head>
 <body style="margin:0; padding:0; font-family:Arial,sans-serif; background-color:#f5f5f5;">
   <div style="max-width:600px; margin:20px auto; background-color:#ffffff; padding:30px; border-radius:8px;">
-    
-    <!-- Header -->
     <div style="text-align:center; margin-bottom:30px;">
       <h1 style="color:#1a1a1a; font-size:24px; margin:0;">Cesar Graphics</h1>
     </div>
-
-    <!-- Main Content -->
     <div style="color:#333333; font-size:16px; line-height:1.6;">
       <p>Hi ${clientName || 'there'},</p>
-      
       <p><strong>Your proof is ready for review!</strong></p>
-      
       <p><strong>Proof:</strong> ${title}</p>
-      
       <p>Please review and provide your feedback.</p>
-      
       <p><strong>View your proof here:</strong><br>
       <a href="${loginUrl}" style="color:#0066cc; text-decoration:none;">${loginUrl}</a></p>
-      
       <p style="margin-top:30px;">Questions? Just reply to this email.</p>
-      
       <p style="margin-top:20px;">Best regards,<br>
       <strong>The Cesar Graphics Team</strong></p>
     </div>
-
-    <!-- Footer -->
     <div style="margin-top:40px; padding-top:20px; border-top:1px solid #e5e5e5; text-align:center; color:#999999; font-size:12px;">
       <p style="margin:5px 0;">You're receiving this because you have an active project with Cesar Graphics.</p>
     </div>
@@ -133,12 +106,7 @@ const getSimpleProofNotificationTemplate = (data) => {
 };
 
 const getSimpleProductionStatusTemplate = (data) => {
-  const {
-    clientName,
-    title,
-    status,
-    loginUrl
-  } = data;
+  const { clientName, title, status, loginUrl } = data;
 
   const statusMessages = {
     in_production: {
@@ -153,7 +121,6 @@ const getSimpleProductionStatusTemplate = (data) => {
       heading: 'Your Order is Ready!',
       message: 'Your order has been completed and is ready for pickup or delivery.'
     },
-
   };
 
   const config = statusMessages[status] || statusMessages.in_production;
@@ -166,32 +133,20 @@ const getSimpleProductionStatusTemplate = (data) => {
 </head>
 <body style="margin:0; padding:0; font-family:Arial,sans-serif; background-color:#f5f5f5;">
   <div style="max-width:600px; margin:20px auto; background-color:#ffffff; padding:30px; border-radius:8px;">
-    
-    <!-- Header -->
     <div style="text-align:center; margin-bottom:30px;">
       <h1 style="color:#1a1a1a; font-size:24px; margin:0;">Cesar Graphics</h1>
     </div>
-
-    <!-- Main Content -->
     <div style="color:#333333; font-size:16px; line-height:1.6;">
       <p>Hi ${clientName || 'there'},</p>
-      
       <p><strong>${config.heading}</strong></p>
-      
       <p>${config.message}</p>
-      
       <p><strong>Order:</strong> ${title}</p>
-      
       <p><strong>View your order status:</strong><br>
       <a href="${loginUrl}" style="color:#0066cc; text-decoration:none;">${loginUrl}</a></p>
-      
       <p style="margin-top:30px;">Questions? Just reply to this email.</p>
-      
       <p style="margin-top:20px;">Best regards,<br>
       <strong>The Cesar Graphics Team</strong></p>
     </div>
-
-    <!-- Footer -->
     <div style="margin-top:40px; padding-top:20px; border-top:1px solid #e5e5e5; text-align:center; color:#999999; font-size:12px;">
       <p style="margin:5px 0;">You're receiving this because you have an active project with Cesar Graphics.</p>
     </div>
@@ -201,7 +156,7 @@ const getSimpleProductionStatusTemplate = (data) => {
 };
 
 // =============================================================================
-// CLOUD FUNCTIONS - CALLABLE (for Firebase SDK httpsCallable)
+// CALLABLE FUNCTIONS
 // =============================================================================
 
 // Send client invitation email
@@ -222,7 +177,6 @@ exports.sendClientInvitation = onCall(
     try {
       const resend = new Resend(resendApiKey.value());
 
-      // Check for pending proofs for this email
       const pendingProofsQuery = await db.collection('proofs')
         .where('clientEmail', '==', clientEmail.toLowerCase())
         .where('status', '==', 'pending')
@@ -248,7 +202,7 @@ exports.sendClientInvitation = onCall(
       const emailData = {
         from: FROM_EMAIL,
         to: clientEmail,
-        subject: pendingProofs.length > 0 
+        subject: pendingProofs.length > 0
           ? `Welcome to Cesar Graphics - ${pendingProofs.length} Proof${pendingProofs.length > 1 ? 's' : ''} Ready!`
           : 'You\'re invited to Cesar Graphics Proofing Portal',
         html: getSimpleInvitationTemplate(templateData),
@@ -257,16 +211,15 @@ exports.sendClientInvitation = onCall(
 
       const result = await resend.emails.send(emailData);
 
-      console.log('✅ Smart invitation email sent successfully:', {
+      console.log('✅ Invitation email sent:', {
         to: clientEmail,
         clientName,
-        inviterEmail,
         proofCount: pendingProofs.length,
         resendId: result.data?.id
       });
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: `Invitation sent successfully${pendingProofs.length > 0 ? ` with ${pendingProofs.length} pending proof${pendingProofs.length > 1 ? 's' : ''}` : ''}`,
         emailId: result.data?.id
       };
@@ -311,8 +264,8 @@ exports.sendProofNotification = onCall(
         resendId: result.data?.id
       });
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: 'Notification sent successfully',
         emailId: result.data?.id
       };
@@ -323,10 +276,6 @@ exports.sendProofNotification = onCall(
     }
   }
 );
-
-// =============================================================================
-// OTHER CLOUD FUNCTIONS
-// =============================================================================
 
 // Transfer proof ownership from invitation ID to user Auth UID
 exports.transferProofOwnership = onCall(async (request) => {
@@ -345,10 +294,10 @@ exports.transferProofOwnership = onCall(async (request) => {
 
     if (proofsQuery.empty) {
       console.log('ℹ️ No proofs found for invitation ID:', invitationId);
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: 'No proofs to transfer',
-        transferredCount: 0 
+        transferredCount: 0
       };
     }
 
@@ -361,8 +310,8 @@ exports.transferProofOwnership = onCall(async (request) => {
 
     console.log(`✅ Transferred ${proofsQuery.size} proofs to user ${userId}`);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: `Successfully transferred ${proofsQuery.size} proof(s)`,
       transferredCount: proofsQuery.size
     };
@@ -399,8 +348,8 @@ exports.deleteUserCompletely = onCall(async (request) => {
     await batch.commit();
     console.log(`✅ Deleted ${proofsQuery.size} proofs`);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: `User and ${proofsQuery.size} proof(s) deleted successfully`
     };
 
@@ -410,7 +359,95 @@ exports.deleteUserCompletely = onCall(async (request) => {
   }
 });
 
-// Firestore trigger: Handle new proof uploads
+// Create a staff account (designer, production, admin) — admin only
+exports.createStaffUser = onCall(async (request) => {
+  // 1. Must be authenticated
+  if (!request.auth) {
+    throw new Error('unauthenticated: Must be logged in.');
+  }
+
+  // 2. Caller must be an admin
+  const callerDoc = await db.collection('users').doc(request.auth.uid).get();
+  if (!callerDoc.exists || callerDoc.data().role !== 'admin') {
+    throw new Error('permission-denied: Only admins can create staff accounts.');
+  }
+
+  const { displayName, email, password, role } = request.data;
+
+  // 3. Validate inputs
+  if (!displayName || !email || !password || !role) {
+    throw new Error('invalid-argument: displayName, email, password, and role are required.');
+  }
+  if (!['admin', 'designer', 'production'].includes(role)) {
+    throw new Error('invalid-argument: Role must be admin, designer, or production.');
+  }
+  if (password.length < 8) {
+    throw new Error('invalid-argument: Password must be at least 8 characters.');
+  }
+
+  const ROLE_PERMISSIONS = {
+    admin: {
+      canViewAllProofs: true,
+      canUploadProofs: true,
+      canApproveProofs: true,
+      canManageUsers: true
+    },
+    designer: {
+      canViewAllProofs: false,
+      canUploadProofs: true,
+      canApproveProofs: false,
+      canManageUsers: false
+    },
+    production: {
+      canViewAllProofs: false,
+      canUploadProofs: false,
+      canApproveProofs: false,
+      canManageUsers: false
+    }
+  };
+
+  try {
+    // 4. Create Firebase Auth user
+    const userRecord = await getAuth().createUser({
+      email: email.trim().toLowerCase(),
+      password,
+      displayName: displayName.trim(),
+    });
+
+    // 5. Write Firestore profile
+    await db.collection('users').doc(userRecord.uid).set({
+      uid: userRecord.uid,
+      email: email.trim().toLowerCase(),
+      displayName: displayName.trim(),
+      role,
+      status: 'active',
+      isActive: true,
+      permissions: ROLE_PERMISSIONS[role],
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      createdBy: request.auth.uid,
+    });
+
+    console.log(`✅ Staff account created: ${email} (${role})`);
+    return { success: true, uid: userRecord.uid };
+
+  } catch (err) {
+    console.error('createStaffUser error:', err);
+    if (err.code === 'auth/email-already-exists') {
+      throw new Error('already-exists: An account with this email already exists.');
+    }
+    if (err.code === 'auth/invalid-email') {
+      throw new Error('invalid-argument: Invalid email address.');
+    }
+    throw new Error(err.message || 'Failed to create account.');
+  }
+});
+
+// =============================================================================
+// FIRESTORE TRIGGERS
+// =============================================================================
+
+// Handle new proof uploads
 exports.handleNewProof = onDocumentCreated(
   {
     document: 'proofs/{proofId}',
@@ -483,7 +520,7 @@ exports.handleNewProof = onDocumentCreated(
         await resend.emails.send(clientEmailData);
         console.log('✅ Client notification sent');
       } else if (clientData.status === 'invited' || clientData.status === 'pending') {
-        console.log('ℹ️ Client is pending signup, skipping notification (invitation email already sent)');
+        console.log('ℹ️ Client is pending signup, skipping notification');
       }
 
     } catch (error) {
@@ -492,7 +529,7 @@ exports.handleNewProof = onDocumentCreated(
   }
 );
 
-// Firestore trigger: Handle proof status changes
+// Handle proof status changes
 exports.handleProofStatusChange = onDocumentUpdated(
   {
     document: 'proofs/{proofId}',
@@ -502,9 +539,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
     const beforeData = event.data.before.data();
     const afterData = event.data.after.data();
 
-    if (beforeData.status === afterData.status) {
-      return;
-    }
+    if (beforeData.status === afterData.status) return;
 
     console.log(`📊 Proof status changed: ${beforeData.status} → ${afterData.status}`);
 
@@ -558,7 +593,6 @@ exports.handleProofStatusChange = onDocumentUpdated(
         console.log(`✅ Client notified of ${afterData.status} status`);
       }
 
-
     } catch (error) {
       console.error('❌ Error in handleProofStatusChange:', error);
     }
@@ -567,12 +601,6 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
 // =============================================================================
 // PDF THUMBNAIL GENERATION
-// Triggers when a file is uploaded to Firebase Storage
-// =============================================================================
-
-// =============================================================================
-// PDF THUMBNAIL GENERATION
-// Triggers when a file is uploaded to Firebase Storage
 // =============================================================================
 
 exports.generatePdfThumbnail = onObjectFinalized(
@@ -581,7 +609,6 @@ exports.generatePdfThumbnail = onObjectFinalized(
     const filePath = event.data.name;
     const contentType = event.data.contentType;
 
-    // Only process PDFs in the proofFiles folder
     if (!filePath.startsWith("proofFiles/") || contentType !== "application/pdf") {
       console.log("⏭️ Skipping non-PDF or wrong folder:", filePath);
       return;
@@ -590,17 +617,13 @@ exports.generatePdfThumbnail = onObjectFinalized(
     console.log("🖼️ Generating thumbnail for:", filePath);
 
     try {
-      // Use @napi-rs/canvas — required for pdfjs-dist v5+
-      // (the old 'canvas' package is NOT compatible with pdfjs v5)
       const { createCanvas, DOMMatrix, Image, ImageData, Path2D } = require("@napi-rs/canvas");
 
-      // Polyfill browser globals for pdfjs-dist in Node.js environment
       global.DOMMatrix = DOMMatrix;
       global.Image = Image;
       global.ImageData = ImageData;
       global.Path2D = Path2D;
 
-      // Polyfill document.createElement for pdfjs internal canvas creation
       global.document = {
         createElement: (tag) => createCanvas(1, 1),
         createElementNS: (_ns, tag) => createCanvas(1, 1),
@@ -608,11 +631,9 @@ exports.generatePdfThumbnail = onObjectFinalized(
 
       const pdfjsLib = require("pdfjs-dist/legacy/build/pdf.mjs");
 
-      // Download PDF from Storage into a buffer
       const bucket = getStorage().bucket();
       const [pdfBuffer] = await bucket.file(filePath).download();
 
-      // Custom canvas factory so pdfjs uses @napi-rs/canvas
       const NodeCanvasFactory = {
         create(width, height) {
           const canvas = createCanvas(width, height);
@@ -631,7 +652,6 @@ exports.generatePdfThumbnail = onObjectFinalized(
         },
       };
 
-      // Load PDF with pdfjs
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(pdfBuffer),
         canvasFactory: NodeCanvasFactory,
@@ -639,58 +659,55 @@ exports.generatePdfThumbnail = onObjectFinalized(
       const pdfDoc = await loadingTask.promise;
       const page = await pdfDoc.getPage(1);
 
-      // Set up canvas
       const scale = 1.5;
       const viewport = page.getViewport({ scale });
       const canvasAndContext = NodeCanvasFactory.create(viewport.width, viewport.height);
 
-      // Render page to canvas
       await page.render({
         canvasContext: canvasAndContext.context,
         viewport,
         canvasFactory: NodeCanvasFactory,
       }).promise;
 
-      // Convert canvas to PNG buffer
       const thumbnailBuffer = canvasAndContext.canvas.toBuffer("image/png");
 
-      // Save thumbnail to Storage
       const fileName = filePath.split("/").pop().replace(".pdf", "");
       const thumbnailPath = `thumbnailFiles/${fileName}.png`;
       await bucket.file(thumbnailPath).save(thumbnailBuffer, {
         metadata: { contentType: "image/png" },
       });
 
-      // Make thumbnail publicly accessible
       await bucket.file(thumbnailPath).makePublic();
       const thumbnailUrl = `https://storage.googleapis.com/${bucket.name}/${thumbnailPath}`;
 
       console.log("✅ Thumbnail saved:", thumbnailUrl);
 
-    // ⭐ FIXED: query by fileName field directly — reliable, no URL encoding issues
-    const storageFileName = filePath.split("/").pop(); // e.g. "1778269405239_proof.pdf"
+      const storageFileName = filePath.split("/").pop();
+      console.log("🔍 Looking for proof with fileName:", storageFileName);
 
-    console.log("🔍 Looking for proof with fileName:", storageFileName);
+      const proofsQuery = await db.collection("proofs")
+        .where("fileName", "==", storageFileName)
+        .limit(1)
+        .get();
 
-    const proofsQuery = await db.collection("proofs")
-      .where("fileName", "==", storageFileName)
-      .limit(1)
-      .get();
-
-    if (!proofsQuery.empty) {
-      const proofDoc = proofsQuery.docs[0];
-      await proofDoc.ref.update({ thumbnailUrl });
-      console.log("✅ Proof doc updated with thumbnailUrl:", proofDoc.id);
-    } else {
-      console.log("⚠️ No proof found with fileName:", storageFileName);
-    }
+      if (!proofsQuery.empty) {
+        const proofDoc = proofsQuery.docs[0];
+        await proofDoc.ref.update({ thumbnailUrl });
+        console.log("✅ Proof doc updated with thumbnailUrl:", proofDoc.id);
+      } else {
+        console.log("⚠️ No proof found with fileName:", storageFileName);
+      }
 
     } catch (error) {
       console.error("❌ Error generating thumbnail:", error);
     }
   }
 );
-// Health check endpoint
+
+// =============================================================================
+// HEALTH CHECK
+// =============================================================================
+
 exports.healthCheck = onRequest(async (req, res) => {
   res.json({
     status: 'healthy',
@@ -700,6 +717,7 @@ exports.healthCheck = onRequest(async (req, res) => {
       'sendProofNotification',
       'transferProofOwnership',
       'deleteUserCompletely',
+      'createStaffUser',
       'handleNewProof',
       'handleProofStatusChange',
       'generatePdfThumbnail',
