@@ -371,7 +371,7 @@ export default function UserManagement() {
                 <h3 className="text-lg font-semibold text-gray-900">Delete User</h3>
                 <p className="text-sm text-gray-600 mt-1">
                   Are you sure you want to delete <strong>{deletingUser.displayName}</strong> ({deletingUser.email})?
-                  This only removes their Firestore profile — their Firebase Auth account will remain.
+                  This will permanently remove the user from the system, including their login credentials.
                 </p>
                 <p className="text-sm text-gray-500 mt-2">
                   Any proofs assigned to this user will need to be reassigned.

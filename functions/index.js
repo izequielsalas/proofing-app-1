@@ -322,7 +322,6 @@ exports.transferProofOwnership = onCall(async (request) => {
   }
 });
 
-// Delete user and all associated data
 exports.deleteUserCompletely = onCall(async (request) => {
   const { userId } = request.data;
 
@@ -333,9 +332,11 @@ exports.deleteUserCompletely = onCall(async (request) => {
   try {
     console.log(`🗑️ Starting complete deletion for user: ${userId}`);
 
+    // Delete Firestore doc
     await db.collection('users').doc(userId).delete();
     console.log('✅ User document deleted');
 
+    // Delete any proofs assigned to this user
     const proofsQuery = await db.collection('proofs')
       .where('clientId', '==', userId)
       .get();
@@ -344,9 +345,18 @@ exports.deleteUserCompletely = onCall(async (request) => {
     proofsQuery.docs.forEach(doc => {
       batch.delete(doc.ref);
     });
-
     await batch.commit();
     console.log(`✅ Deleted ${proofsQuery.size} proofs`);
+
+    // Delete Firebase Auth account
+    try {
+      await getAuth().deleteUser(userId);
+      console.log('✅ Firebase Auth account deleted');
+    } catch (authErr) {
+      // Don't fail the whole operation if Auth delete fails
+      // (account may not exist in Auth if created via legacy flow)
+      console.warn('⚠️ Could not delete Auth account:', authErr.message);
+    }
 
     return {
       success: true,
