@@ -382,7 +382,7 @@ exports.createStaffUser = onCall(async (request) => {
     throw new Error('permission-denied: Only admins can create staff accounts.');
   }
 
-  const { displayName, email, password, role } = request.data;
+  const { displayName, email, password, role, department } = request.data;
 
   // 3. Validate inputs
   if (!displayName || !email || !password || !role) {
@@ -430,6 +430,7 @@ exports.createStaffUser = onCall(async (request) => {
       email: email.trim().toLowerCase(),
       displayName: displayName.trim(),
       role,
+      ...(role === 'production' && department ? { department: department.trim() } : {}),
       status: 'active',
       isActive: true,
       permissions: ROLE_PERMISSIONS[role],

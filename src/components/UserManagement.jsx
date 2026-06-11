@@ -45,6 +45,16 @@ const ROLE_COLORS = {
   client: 'bg-[#E6F9DD] text-[#2D7A0F]',
 };
 
+const DEPARTMENTS = [
+  'Signs',
+  'Printing',
+  'Screenprinting',
+  'Embroidery',
+  'DTF',
+  'Promo Items',
+  'Outsource',
+];
+
 function generatePassword() {
   const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$';
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -65,11 +75,12 @@ export default function UserManagement() {
     email: '',
     password: '',
     role: 'designer',
+    department: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
-  const [createSuccess, setCreateSuccess] = useState(null); // { displayName, email, role }
+  const [createSuccess, setCreateSuccess] = useState(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [togglingUser, setTogglingUser] = useState(null);
@@ -81,7 +92,6 @@ export default function UserManagement() {
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Sort: admins first, then designers, then others
       list.sort((a, b) => {
         const order = { admin: 0, designer: 1, production: 2, client: 3 };
         return (order[a.role] ?? 4) - (order[b.role] ?? 4);
@@ -123,7 +133,7 @@ export default function UserManagement() {
 
   // ── Toggle active/inactive ─────────────────────────────────────
   const toggleUserStatus = async (user) => {
-    if (user.id === userProfile?.uid) return; // Can't deactivate yourself
+    if (user.id === userProfile?.uid) return;
     setTogglingUser(user.id);
     try {
       await updateDoc(doc(db, 'users', user.id), {
@@ -169,7 +179,7 @@ export default function UserManagement() {
 
   // ── Create staff account ──────────────────────────────────────
   const openCreateModal = () => {
-    setCreateForm({ displayName: '', email: '', password: generatePassword(), role: 'designer' });
+    setCreateForm({ displayName: '', email: '', password: generatePassword(), role: 'designer', department: '' });
     setCreateError('');
     setCreateSuccess(null);
     setShowCreateModal(true);
@@ -182,13 +192,17 @@ export default function UserManagement() {
   };
 
   const handleCreateStaff = async () => {
-    const { displayName, email, password, role } = createForm;
+    const { displayName, email, password, role, department } = createForm;
     if (!displayName.trim() || !email.trim() || !password.trim()) {
       setCreateError('All fields are required.');
       return;
     }
     if (password.length < 8) {
       setCreateError('Password must be at least 8 characters.');
+      return;
+    }
+    if (role === 'production' && !department.trim()) {
+      setCreateError('Department is required for production staff.');
       return;
     }
 
@@ -198,9 +212,21 @@ export default function UserManagement() {
     try {
       const functions = getFunctions();
       const createStaffUser = httpsCallable(functions, 'createStaffUser');
-      await createStaffUser({ displayName: displayName.trim(), email: email.trim(), password, role });
+      await createStaffUser({
+        displayName: displayName.trim(),
+        email: email.trim(),
+        password,
+        role,
+        department: department.trim() || null,
+      });
 
-      setCreateSuccess({ displayName: displayName.trim(), email: email.trim(), role, password });
+      setCreateSuccess({
+        displayName: displayName.trim(),
+        email: email.trim(),
+        role,
+        department: department.trim() || null,
+        password,
+      });
     } catch (err) {
       console.error('Create staff error:', err);
       setCreateError(err.message || 'Failed to create account. Please try again.');
@@ -312,7 +338,7 @@ export default function UserManagement() {
           onDelete={openDeleteModal}
           canDeleteUser={canDeleteUser}
           formatDate={formatDate}
-          showClientCol={false}
+          showDepartmentCol={true}
         />
       </div>
 
@@ -337,7 +363,7 @@ export default function UserManagement() {
           onDelete={openDeleteModal}
           canDeleteUser={canDeleteUser}
           formatDate={formatDate}
-          showClientCol={true}
+          showDepartmentCol={false}
         />
       </div>
 
@@ -348,7 +374,7 @@ export default function UserManagement() {
           {[
             { role: 'Admin', color: 'border-[#5A3695]/30', titleColor: 'text-[#5A3695]', items: ['Full system access', 'View all proofs', 'Upload & manage proofs', 'Manage users', 'Approve / decline'] },
             { role: 'Designer', color: 'border-cesar-navy/30', titleColor: 'text-cesar-navy', items: ['Upload proofs', 'Assign to clients', 'View own uploads', 'No approval rights', 'No user management'] },
-            { role: 'Production', color: 'border-[#E65100]/30', titleColor: 'text-[#E65100]', items: ['View approved proofs', 'Update production status', 'Read-only access', 'No upload rights', 'No client visibility'] },
+            { role: 'Production', color: 'border-[#E65100]/30', titleColor: 'text-[#E65100]', items: ['View approved proofs', 'Update production status', 'Department-specific board', 'No upload rights', 'No client visibility'] },
             { role: 'Client', color: 'border-[#2D7A0F]/30', titleColor: 'text-[#2D7A0F]', items: ['View own proofs only', 'Approve / decline', 'Add comments', 'Download approved files', 'No upload rights'] },
           ].map(({ role, color, titleColor, items }) => (
             <div key={role} className={`border ${color} rounded-lg p-4`}>
@@ -415,6 +441,9 @@ export default function UserManagement() {
                   <p><span className="font-medium">Name:</span> {createSuccess.displayName}</p>
                   <p><span className="font-medium">Email:</span> {createSuccess.email}</p>
                   <p><span className="font-medium">Role:</span> <span className="capitalize">{createSuccess.role}</span></p>
+                  {createSuccess.department && (
+                    <p><span className="font-medium">Department:</span> {createSuccess.department}</p>
+                  )}
                 </div>
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <p className="text-xs text-yellow-800 font-medium mb-2">⚠️ Share this password with the new staff member — it won't be shown again:</p>
@@ -469,13 +498,32 @@ export default function UserManagement() {
                   <select
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy text-sm"
                     value={createForm.role}
-                    onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))}
+                    onChange={e => setCreateForm(f => ({ ...f, role: e.target.value, department: '' }))}
                   >
                     <option value="designer">Designer</option>
                     <option value="production">Production</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
+
+                {/* Department — only shown for production role */}
+                {createForm.role === 'production' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Department <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy text-sm"
+                      value={createForm.department}
+                      onChange={e => setCreateForm(f => ({ ...f, department: e.target.value }))}
+                    >
+                      <option value="">Select department...</option>
+                      {DEPARTMENTS.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -536,7 +584,7 @@ export default function UserManagement() {
 function UserTable({
   users, editingUser, tempRole, setTempRole, savingRole, togglingUser,
   currentUserId, onEditRole, onSaveRole, onCancelEdit, onToggleStatus,
-  onDelete, canDeleteUser, formatDate
+  onDelete, canDeleteUser, formatDate, showDepartmentCol
 }) {
   if (users.length === 0) {
     return <div className="px-6 py-8 text-center text-gray-500 text-sm">No users in this group.</div>;
@@ -549,6 +597,9 @@ function UserTable({
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+            {showDepartmentCol && (
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+            )}
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -623,6 +674,16 @@ function UserTable({
                   )}
                 </td>
 
+                {/* Department — only in staff table */}
+                {showDepartmentCol && (
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {user.role === 'production'
+                      ? (user.department || <span className="text-gray-400 italic">Not set</span>)
+                      : <span className="text-gray-300">—</span>
+                    }
+                  </td>
+                )}
+
                 {/* Active/Inactive */}
                 <td className="px-6 py-4">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${inactive ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
@@ -638,7 +699,6 @@ function UserTable({
                 {/* Actions */}
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-1">
-                    {/* Toggle active */}
                     {!isCurrentUser && (
                       <button
                         onClick={() => onToggleStatus(user)}
@@ -652,8 +712,6 @@ function UserTable({
                         }
                       </button>
                     )}
-
-                    {/* Delete */}
                     {canDeleteUser(user) && (
                       <button
                         onClick={() => onDelete(user)}

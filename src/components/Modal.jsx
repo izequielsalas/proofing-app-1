@@ -1,10 +1,10 @@
-// src/components/Modal.jsx - With Revision System
+// src/components/Modal.jsx - With Revision System + Notes + Tags
 import { motion } from "framer-motion";
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
-import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck } from "lucide-react";
+import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag } from "lucide-react";
 import UploadProof from "./uploadProof";
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -18,7 +18,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 export default function Modal({ project, onClose }) {
   const stopPropagation = (e) => e.stopPropagation();
   const isPDF = project.fileUrl?.toLowerCase().includes('.pdf');
-  const { hasPermission } = useAuth();
+  const { hasPermission, userProfile } = useAuth();
   
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [notes, setNotes] = useState("");
@@ -28,7 +28,12 @@ export default function Modal({ project, onClose }) {
   const [revisionHistory, setRevisionHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [historyError, setHistoryError] = useState(null); // ⭐ NEW: surface history errors
+  const [historyError, setHistoryError] = useState(null);
+
+  // ── Notes state ───────────────────────────────────────────────
+  const [proofNotes, setProofNotes] = useState(project.notes_list || []);
+  const [newNote, setNewNote] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
@@ -43,7 +48,7 @@ export default function Modal({ project, onClose }) {
     };
   }, []);
 
-  // ⭐ FIXED: Load revision history automatically on modal open (not on toggle)
+  // Load revision history automatically on modal open
   useEffect(() => {
     loadRevisionHistory();
   }, []);
@@ -57,21 +62,51 @@ export default function Modal({ project, onClose }) {
         where("revisionChainId", "==", revisionChainId),
         orderBy("revisionNumber", "desc")
       );
-      
       const snapshot = await getDocs(q);
       const history = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(proof => proof.id !== project.id);
-      
       setRevisionHistory(history);
     } catch (error) {
-      // ⭐ FIXED: surface error instead of silently swallowing it
       console.error("Error loading revision history:", error);
-      console.error("Chain ID attempted:", revisionChainId);
-      console.error("Full error:", JSON.stringify(error));
       setHistoryError(error.message);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  // ── Add note ──────────────────────────────────────────────────
+  const handleAddNote = async () => {
+    const trimmed = newNote.trim();
+    if (!trimmed || savingNote) return;
+
+    setSavingNote(true);
+    try {
+      const noteEntry = {
+        text: trimmed,
+        authorName: userProfile?.displayName || userProfile?.email || 'Unknown',
+        authorRole: userProfile?.role || 'unknown',
+        createdAt: new Date().toISOString(),
+      };
+
+      await updateDoc(doc(db, 'proofs', project.id), {
+        notes_list: arrayUnion(noteEntry),
+        updatedAt: serverTimestamp(),
+      });
+
+      setProofNotes(prev => [...prev, noteEntry]);
+      setNewNote('');
+    } catch (err) {
+      console.error('Error saving note:', err);
+      alert('Failed to save note. Please try again.');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleNoteKeyDown = (e) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      handleAddNote();
     }
   };
 
@@ -158,6 +193,16 @@ export default function Modal({ project, onClose }) {
     }
   };
 
+  const getRoleColor = (role) => {
+    switch (role) {
+      case 'admin': return 'bg-[#EDE7F6] text-[#5A3695]';
+      case 'designer': return 'bg-[#E0EAF5] text-cesar-navy';
+      case 'production': return 'bg-[#FFF3E0] text-[#E65100]';
+      case 'client': return 'bg-[#E6F9DD] text-[#2D7A0F]';
+      default: return 'bg-gray-100 text-gray-600';
+    }
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown';
     try {
@@ -174,7 +219,21 @@ export default function Modal({ project, onClose }) {
     }
   };
 
-  // ⭐ FIXED: show history section for any proof that has or might have revisions
+  const formatNoteDate = (isoString) => {
+    if (!isoString) return '';
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '';
+    }
+  };
+
   const hasRevisionHistory = revisionHistory.length > 0;
   const showRevisionSection = hasRevisionHistory || isRevision || loadingHistory;
 
@@ -224,7 +283,7 @@ export default function Modal({ project, onClose }) {
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto p-6">
 
-          {/* ⭐ FIXED: Revision History — shows for any proof with revisions, not just revisions themselves */}
+          {/* Revision History */}
           {showRevisionSection && (
             <div className="mb-6">
               <button
@@ -338,10 +397,27 @@ export default function Modal({ project, onClose }) {
                 </div>
               )}
             </div>
+
+            {/* Tags */}
+            {project.tags?.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Tag className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  {project.tags.map(tag => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cesar-navy/10 text-cesar-navy"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Comments Section */}
-          {(showCommentBox || project.comments || project.notes) && (
+          {/* Comments Section (approve/decline flow) */}
+          {(showCommentBox || project.comments) && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {showCommentBox && project.status === 'pending'
@@ -370,12 +446,81 @@ export default function Modal({ project, onClose }) {
               ) : (
                 <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-gray-900">
-                    {project.comments || project.notes || 'No comments provided'}
+                    {project.comments || 'No comments provided'}
                   </p>
                 </div>
               )}
             </div>
           )}
+
+          {/* ── Notes Panel ─────────────────────────────────────── */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="w-4 h-4 text-gray-500" />
+              <h3 className="text-sm font-semibold text-gray-700">
+                Notes
+                {proofNotes.length > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">
+                    {proofNotes.length}
+                  </span>
+                )}
+              </h3>
+            </div>
+
+            {/* Existing notes */}
+            {proofNotes.length > 0 ? (
+              <div className="space-y-3 mb-4">
+                {proofNotes.map((note, index) => (
+                  <div key={index} className="flex gap-3">
+                    <div className="w-7 h-7 rounded-full bg-cesar-navy/10 flex items-center justify-center text-cesar-navy font-semibold text-xs flex-shrink-0 mt-0.5">
+                      {(note.authorName || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="text-sm font-medium text-gray-900">{note.authorName}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium capitalize ${getRoleColor(note.authorRole)}`}>
+                          {note.authorRole}
+                        </span>
+                        <span className="text-xs text-gray-400">{formatNoteDate(note.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{note.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 mb-4">No notes yet.</p>
+            )}
+
+            {/* Add note input */}
+            <div className="flex gap-2 items-start">
+              <div className="w-7 h-7 rounded-full bg-cesar-navy/10 flex items-center justify-center text-cesar-navy font-semibold text-xs flex-shrink-0 mt-1">
+                {(userProfile?.displayName || userProfile?.email || '?')[0].toUpperCase()}
+              </div>
+              <div className="flex-1">
+                <textarea
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  onKeyDown={handleNoteKeyDown}
+                  placeholder="Add a note... (Cmd+Enter to submit)"
+                  rows={2}
+                  disabled={savingNote}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy text-sm resize-none disabled:opacity-50"
+                />
+              </div>
+              <button
+                onClick={handleAddNote}
+                disabled={!newNote.trim() || savingNote}
+                className="p-2 bg-cesar-navy hover:bg-[#003070] text-white rounded-lg transition-colors disabled:opacity-40 mt-1"
+                title="Add note"
+              >
+                {savingNote
+                  ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  : <Send size={16} />
+                }
+              </button>
+            </div>
+          </div>
 
           {/* Production Status Banner */}
           {['in_production', 'in_quality_control', 'completed'].includes(project.status) && (

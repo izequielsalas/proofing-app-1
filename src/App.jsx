@@ -10,6 +10,7 @@ import UnauthorizedPage from './components/UnauthorizedPage';
 import PrivateBrowsingNotice from './components/PrivateBrowsingNotice';
 import AcceptInvitation from './components/AcceptInvitation';
 import AdminProofs from './components/AdminProofs';
+import AdminTags from './components/AdminTags';
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
 
             {/* Admin routes */}
             <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+            <Route path="/admin/tags" element={<ProtectedRoute><AdminTags /></ProtectedRoute>} />
 
             {/* Unauthorized page */}
             <Route path="/unauthorized" element={<UnauthorizedPage />} />

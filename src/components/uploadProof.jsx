@@ -1,11 +1,11 @@
-// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection
+// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection + tags
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { sendInvitationEmail } from '../utils/emailService';
-import { Upload, File, X, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { Upload, File, X, CheckCircle, AlertCircle, ChevronDown, Tag } from 'lucide-react';
 
 export default function UploadProof({ onUploadComplete, revisionMode = false, parentProof = null }) {
   const [files, setFiles] = useState([]);
@@ -13,7 +13,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedClientLabel, setSelectedClientLabel] = useState(''); // ⭐ display name of selected client
+  const [selectedClientLabel, setSelectedClientLabel] = useState('');
   const [clients, setClients] = useState([]);
   const [clientSearch, setClientSearch] = useState('');
   const [comboOpen, setComboOpen] = useState(false);
@@ -25,6 +25,11 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   const [invitingClient, setInvitingClient] = useState(false);
   const [debugLog, setDebugLog] = useState([]);
   const [uploadError, setUploadError] = useState(null);
+
+  // ── Tags ──────────────────────────────────────────────────────
+  const [availableTags, setAvailableTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState([]);
+
   const fileInputRef = useRef();
   const comboRef = useRef();
   const inputRef = useRef();
@@ -45,6 +50,21 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       addDebugLog(`🔄 Revision mode active — chain: ${parentProof.revisionChainId || parentProof.id}`);
     }
   }, [revisionMode, parentProof]);
+
+  // Fetch available tags from settings/tags
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const tagDoc = await getDoc(doc(db, 'settings', 'tags'));
+        if (tagDoc.exists()) {
+          setAvailableTags(tagDoc.data().list || []);
+        }
+      } catch (err) {
+        console.error('Error fetching tags:', err);
+      }
+    };
+    fetchTags();
+  }, []);
 
   // Fetch clients from BOTH users and invitations collections
   useEffect(() => {
@@ -85,7 +105,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     const handleClickOutside = (e) => {
       if (comboRef.current && !comboRef.current.contains(e.target)) {
         setComboOpen(false);
-        // If nothing selected, reset search to empty
         if (!selectedClientId) setClientSearch('');
         else setClientSearch(selectedClientLabel);
       }
@@ -157,6 +176,13 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     setClientSearch('');
     setComboOpen(false);
     inputRef.current?.focus();
+  };
+
+  // ── Tag toggle ────────────────────────────────────────────────
+  const toggleTag = (tag) => {
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
   };
 
   const handleInviteClient = async () => {
@@ -301,10 +327,11 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           clientEmail: parentProof.clientEmail,
           clientStatus: parentProof.clientStatus || 'active',
           fileUrl: downloadURL,
-          fileName: fileName, // ⭐ FIXED: full timestamped name for thumbnail matching
+          fileName: fileName,
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
+          tags: selectedTags,
           notes: notes.trim(),
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
@@ -320,10 +347,11 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           clientEmail: selectedClient?.email,
           clientStatus: selectedClient?.status || 'active',
           fileUrl: downloadURL,
-          fileName: fileName, // ⭐ FIXED: full timestamped name for thumbnail matching
+          fileName: fileName,
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
+          tags: selectedTags,
           notes: notes.trim(),
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
@@ -354,6 +382,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       setSelectedClientLabel('');
       setClientSearch('');
       setNotes('');
+      setSelectedTags([]);
       setUploadProgress({});
       if (fileInputRef.current) fileInputRef.current.value = '';
 
@@ -450,7 +479,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
             </button>
           </div>
 
-          {/* ⭐ Combobox */}
           <div ref={comboRef} className="relative">
             <div className="relative">
               <input
@@ -474,7 +502,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
               </div>
             </div>
 
-            {/* Dropdown list */}
             {comboOpen && (
               <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
                 {filteredClients.length > 0 ? (
@@ -552,6 +579,46 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tags */}
+      {availableTags.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Tag className="h-4 w-4 text-gray-500" />
+            <label className="block text-sm font-medium text-gray-700">Tags (Optional)</label>
+            {selectedTags.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedTags([])}
+                className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableTags.map(tag => {
+              const isSelected = selectedTags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  disabled={uploading}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-50 ${
+                    isSelected
+                      ? 'bg-cesar-navy text-white border-cesar-navy'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
+                  }`}
+                >
+                  {isSelected && <span className="mr-1">✓</span>}
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
