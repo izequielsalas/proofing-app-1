@@ -275,7 +275,7 @@ export default function ProductionDashboard() {
               }`}
             >
               <Settings size={15} />
-              Columns
+              Customize Board
             </button>
             {isAdmin() && (
               <button

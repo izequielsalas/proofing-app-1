@@ -1,12 +1,12 @@
-// src/components/Modal.jsx - With Revision System + Notes + Tags + QC Acknowledge
+// src/components/Modal.jsx - With Revision System + Notes + Tags + QC Acknowledge + Inline Tag Editor
 import { motion } from "framer-motion";
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
-import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag } from "lucide-react";
+import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag, Edit2 } from "lucide-react";
 import UploadProof from "./uploadProof";
-import { Document, Page, pdfjs } from 'react-pdf';
+import { pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -35,9 +35,16 @@ export default function Modal({ project, onClose }) {
   const [newNote, setNewNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
 
+  // ── Tag editor state ──────────────────────────────────────────
+  const [currentTags, setCurrentTags] = useState(project.tags || []);
+  const [availableTags, setAvailableTags] = useState([]);
+  const [editingTags, setEditingTags] = useState(false);
+  const [savingTag, setSavingTag] = useState(false);
+
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
   const currentRevisionNumber = project.revisionNumber || 1;
+  const canEditTags = isAdmin() || isDesigner();
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -48,7 +55,7 @@ export default function Modal({ project, onClose }) {
     };
   }, []);
 
-  // Load revision history + auto-acknowledge QC on modal open
+  // Load revision history + auto-acknowledge QC + fetch available tags
   useEffect(() => {
     loadRevisionHistory();
 
@@ -63,6 +70,19 @@ export default function Modal({ project, onClose }) {
         updatedAt: serverTimestamp(),
       }).catch(err => console.error('Error acknowledging QC:', err));
     }
+
+    // Fetch available tags for the editor
+    const fetchTags = async () => {
+      try {
+        const tagDoc = await getDoc(doc(db, 'settings', 'tags'));
+        if (tagDoc.exists()) {
+          setAvailableTags(tagDoc.data().list || []);
+        }
+      } catch (err) {
+        console.error('Error fetching tags:', err);
+      }
+    };
+    fetchTags();
   }, []);
 
   const loadRevisionHistory = async () => {
@@ -84,6 +104,29 @@ export default function Modal({ project, onClose }) {
       setHistoryError(error.message);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  // ── Tag toggle — saves immediately ───────────────────────────
+  const handleToggleTag = async (tag) => {
+    if (savingTag) return;
+    setSavingTag(true);
+
+    const newTags = currentTags.includes(tag)
+      ? currentTags.filter(t => t !== tag)
+      : [...currentTags, tag];
+
+    try {
+      await updateDoc(doc(db, 'proofs', project.id), {
+        tags: newTags,
+        updatedAt: serverTimestamp(),
+      });
+      setCurrentTags(newTags);
+    } catch (err) {
+      console.error('Error updating tags:', err);
+      alert('Failed to update tags. Please try again.');
+    } finally {
+      setSavingTag(false);
     }
   };
 
@@ -176,13 +219,11 @@ export default function Modal({ project, onClose }) {
         updatedByRole: userProfile?.role || 'unknown',
       };
 
-      // Moving to QC — add tracking fields
       if (newStatus === 'in_quality_control') {
         updateData.qcAddedAt = serverTimestamp();
         updateData.qcAcknowledged = false;
       }
 
-      // Returning to production from QC — clear QC fields and reset column
       if (newStatus === 'in_production') {
         updateData.productionColumn = null;
         updateData.qcAddedAt = null;
@@ -299,7 +340,6 @@ export default function Modal({ project, onClose }) {
             <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(project.status)}`}>
               {getStatusLabel(project.status)}
             </span>
-            {/* QC unacknowledged indicator in header */}
             {project.status === 'in_quality_control' && project.qcAcknowledged === false && (
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#5A3695] text-white flex items-center gap-1">
                 <FlaskConical className="w-4 h-4" />
@@ -431,22 +471,69 @@ export default function Modal({ project, onClose }) {
               )}
             </div>
 
-            {/* Tags */}
-            {project.tags?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Tag className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  {project.tags.map(tag => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cesar-navy/10 text-cesar-navy"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+            {/* Tags section */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-sm font-medium text-gray-600">Tags</span>
+                {canEditTags && availableTags.length > 0 && (
+                  <button
+                    onClick={() => setEditingTags(!editingTags)}
+                    className={`ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                      editingTags
+                        ? 'bg-cesar-navy text-white'
+                        : 'text-gray-400 hover:text-cesar-navy hover:bg-gray-100'
+                    }`}
+                  >
+                    <Edit2 size={11} />
+                    {editingTags ? 'Done' : 'Edit'}
+                  </button>
+                )}
               </div>
-            )}
+
+              {/* Tag picker — edit mode */}
+              {editingTags && canEditTags ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.map(tag => {
+                    const isSelected = currentTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleToggleTag(tag)}
+                        disabled={savingTag}
+                        className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-50 ${
+                          isSelected
+                            ? 'bg-cesar-navy text-white border-cesar-navy'
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
+                        }`}
+                      >
+                        {isSelected && <span className="mr-1">✓</span>}
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Read-only tag display */
+                currentTags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentTags.map(tag => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cesar-navy/10 text-cesar-navy"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">
+                    No tags{canEditTags ? ' — click Edit to add some' : ''}.
+                  </p>
+                )
+              )}
+            </div>
           </div>
 
           {/* Comments Section (approve/decline flow) */}
@@ -639,7 +726,7 @@ export default function Modal({ project, onClose }) {
             Download
           </a>
 
-          {/* Approve / Decline — pending proofs, admin/designer only */}
+          {/* Approve / Decline */}
           {project.status === 'pending' && hasPermission('canUploadProofs') && (
             <>
               <button
@@ -661,7 +748,7 @@ export default function Modal({ project, onClose }) {
             </>
           )}
 
-          {/* Send to Production — admin/designer only, approved proofs */}
+          {/* Send to Production */}
           {project.status === 'approved' && hasPermission('canUploadProofs') && (
             <button
               onClick={() => handleAdvanceStatus('in_production')}
@@ -685,7 +772,7 @@ export default function Modal({ project, onClose }) {
             </button>
           )}
 
-          {/* Mark Completed — admin/designer only */}
+          {/* Mark Completed */}
           {project.status === 'in_quality_control' && hasPermission('canUploadProofs') && (
             <button
               onClick={() => handleAdvanceStatus('completed')}
@@ -697,7 +784,7 @@ export default function Modal({ project, onClose }) {
             </button>
           )}
 
-          {/* Return to Production — admin/designer only, QC failures */}
+          {/* Return to Production */}
           {project.status === 'in_quality_control' && (isAdmin() || isDesigner()) && (
             <button
               onClick={() => handleAdvanceStatus('in_production')}
