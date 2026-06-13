@@ -82,6 +82,7 @@ export function AuthProvider({ children }) {
   const isAdmin = () => userProfile?.role === 'admin';
   const isClient = () => userProfile?.role === 'client';
   const isDesigner = () => userProfile?.role === 'designer';
+  const isProduction = () => userProfile?.role === 'production';
 
   const hasPermission = (permission) => {
     if (permission === 'canUploadProofs') return isAdmin() || isDesigner();
@@ -103,6 +104,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     isClient,
     isDesigner,
+    isProduction,
     hasPermission,
     canViewProof,
     canAssignProofs,

@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@tailwindcss/vite": "^4.1.7",
     "firebase": "^11.10.0",
     "firebase-admin": "^13.4.0",

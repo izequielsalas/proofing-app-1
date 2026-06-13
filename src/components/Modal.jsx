@@ -18,7 +18,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 export default function Modal({ project, onClose }) {
   const stopPropagation = (e) => e.stopPropagation();
   const isPDF = project.fileUrl?.toLowerCase().includes('.pdf');
-  const { hasPermission, userProfile } = useAuth();
+  const { hasPermission, userProfile, isAdmin, isDesigner, isProduction } = useAuth();
   
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [notes, setNotes] = useState("");
@@ -116,6 +116,7 @@ export default function Modal({ project, onClose }) {
       await updateDoc(doc(db, "proofs", project.id), {
         status: "approved",
         updatedAt: serverTimestamp(),
+        updatedByRole: userProfile?.role || 'unknown',
         comments: notes.trim(),
       });
       onClose();
@@ -142,6 +143,7 @@ export default function Modal({ project, onClose }) {
       await updateDoc(doc(db, "proofs", project.id), {
         status: "declined",
         updatedAt: serverTimestamp(),
+        updatedByRole: userProfile?.role || 'unknown',
         comments: notes.trim(),
       });
       onClose();
@@ -156,10 +158,26 @@ export default function Modal({ project, onClose }) {
   const handleAdvanceStatus = async (newStatus) => {
     setIsLoading(true);
     try {
-      await updateDoc(doc(db, "proofs", project.id), {
+      const updateData = {
         status: newStatus,
         updatedAt: serverTimestamp(),
-      });
+        updatedByRole: userProfile?.role || 'unknown',
+      };
+
+      // Moving to QC — add tracking fields
+      if (newStatus === 'in_quality_control') {
+        updateData.qcAddedAt = serverTimestamp();
+        updateData.qcAcknowledged = false;
+      }
+
+      // Returning to production from QC — clear QC fields and reset column
+      if (newStatus === 'in_production') {
+        updateData.productionColumn = null;
+        updateData.qcAddedAt = null;
+        updateData.qcAcknowledged = null;
+      }
+
+      await updateDoc(doc(db, "proofs", project.id), updateData);
       onClose();
     } catch (err) {
       console.error(`Error advancing proof to ${newStatus}:`, err);
@@ -260,14 +278,12 @@ export default function Modal({ project, onClose }) {
             <h2 className="text-2xl font-bold text-gray-900">
               {project.title || `Proof #${project.id?.slice(-6)}`}
             </h2>
-            
             {isRevision && (
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#E0EAF5] text-cesar-navy border border-cesar-navy/30 flex items-center gap-1">
                 <GitBranch className="w-4 h-4" />
                 Revision {currentRevisionNumber}
               </span>
             )}
-            
             <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(project.status)}`}>
               {getStatusLabel(project.status)}
             </span>
@@ -323,9 +339,7 @@ export default function Modal({ project, onClose }) {
                                 {revision.status}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600">
-                              {formatDate(revision.createdAt)}
-                            </p>
+                            <p className="text-sm text-gray-600">{formatDate(revision.createdAt)}</p>
                             {revision.comments && (
                               <p className="text-sm text-gray-700 mt-2 italic">"{revision.comments}"</p>
                             )}
@@ -467,7 +481,6 @@ export default function Modal({ project, onClose }) {
               </h3>
             </div>
 
-            {/* Existing notes */}
             {proofNotes.length > 0 ? (
               <div className="space-y-3 mb-4">
                 {proofNotes.map((note, index) => (
@@ -492,7 +505,6 @@ export default function Modal({ project, onClose }) {
               <p className="text-sm text-gray-400 mb-4">No notes yet.</p>
             )}
 
-            {/* Add note input */}
             <div className="flex gap-2 items-start">
               <div className="w-7 h-7 rounded-full bg-cesar-navy/10 flex items-center justify-center text-cesar-navy font-semibold text-xs flex-shrink-0 mt-1">
                 {(userProfile?.displayName || userProfile?.email || '?')[0].toUpperCase()}
@@ -607,8 +619,9 @@ export default function Modal({ project, onClose }) {
             <Download size={16} />
             Download
           </a>
-          
-          {project.status === 'pending' && (
+
+          {/* Approve / Decline — pending proofs, admin/designer only */}
+          {project.status === 'pending' && hasPermission('canUploadProofs') && (
             <>
               <button
                 onClick={handleApprove}
@@ -618,7 +631,6 @@ export default function Modal({ project, onClose }) {
                 <Check size={16} />
                 {isLoading ? 'Approving...' : 'Approve'}
               </button>
-              
               <button
                 onClick={handleDecline}
                 disabled={isLoading}
@@ -630,41 +642,52 @@ export default function Modal({ project, onClose }) {
             </>
           )}
 
-          {hasPermission('canUploadProofs') && (
-            <>
-              {project.status === 'approved' && (
-                <button
-                  onClick={() => handleAdvanceStatus('in_production')}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <Factory size={16} />
-                  {isLoading ? 'Updating...' : 'Send to Production'}
-                </button>
-              )}
+          {/* Send to Production — admin/designer only, approved proofs */}
+          {project.status === 'approved' && hasPermission('canUploadProofs') && (
+            <button
+              onClick={() => handleAdvanceStatus('in_production')}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Factory size={16} />
+              {isLoading ? 'Updating...' : 'Send to Production'}
+            </button>
+          )}
 
-              {project.status === 'in_production' && (
-                <button
-                  onClick={() => handleAdvanceStatus('in_quality_control')}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-cesar-purple hover:bg-[#6a45a8] text-white rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <FlaskConical size={16} />
-                  {isLoading ? 'Updating...' : 'Move to QC'}
-                </button>
-              )}
+          {/* Move to QC — admin, designer, AND production */}
+          {project.status === 'in_production' && (isAdmin() || isDesigner() || isProduction()) && (
+            <button
+              onClick={() => handleAdvanceStatus('in_quality_control')}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-2 bg-cesar-purple hover:bg-[#6a45a8] text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              <FlaskConical size={16} />
+              {isLoading ? 'Updating...' : 'Move to QC'}
+            </button>
+          )}
 
-              {project.status === 'in_quality_control' && (
-                <button
-                  onClick={() => handleAdvanceStatus('completed')}
-                  disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <PackageCheck size={16} />
-                  {isLoading ? 'Updating...' : 'Mark Completed'}
-                </button>
-              )}
-            </>
+          {/* Mark Completed — admin/designer only */}
+          {project.status === 'in_quality_control' && hasPermission('canUploadProofs') && (
+            <button
+              onClick={() => handleAdvanceStatus('completed')}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              <PackageCheck size={16} />
+              {isLoading ? 'Updating...' : 'Mark Completed'}
+            </button>
+          )}
+
+          {/* Return to Production — admin/designer only, QC failures */}
+          {project.status === 'in_quality_control' && (isAdmin() || isDesigner()) && (
+            <button
+              onClick={() => handleAdvanceStatus('in_production')}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Factory size={16} />
+              {isLoading ? 'Updating...' : 'Return to Production'}
+            </button>
           )}
         </div>
       </motion.div>

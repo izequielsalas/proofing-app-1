@@ -10,7 +10,9 @@ import UnauthorizedPage from './components/UnauthorizedPage';
 import PrivateBrowsingNotice from './components/PrivateBrowsingNotice';
 import AcceptInvitation from './components/AcceptInvitation';
 import AdminProofs from './components/AdminProofs';
-import AdminTags from './components/AdminTags';
+import AdminTags from './components/AdminTags.jsx';
+import ProductionDashboard from './components/ProductionDashboard.jsx';
+
 
 function App() {
   return (
@@ -34,6 +36,7 @@ function App() {
             <Route path="/gallery" element={<ProtectedRoute><ImageGallery /></ProtectedRoute>} />
             <Route path="/proof/:id" element={<ProtectedRoute><ProofViewer /></ProtectedRoute>} />
             <Route path="/admin/proofs" element={<ProtectedRoute><AdminProofs /></ProtectedRoute>} />
+            <Route path="/production" element={<ProtectedRoute><ProductionDashboard /></ProtectedRoute>} />
 
             {/* Admin routes */}
             <Route path="/admin/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
