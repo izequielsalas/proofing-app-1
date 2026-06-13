@@ -1,4 +1,4 @@
-// src/components/Modal.jsx - With Revision System + Notes + Tags
+// src/components/Modal.jsx - With Revision System + Notes + Tags + QC Acknowledge
 import { motion } from "framer-motion";
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion } from "firebase/firestore";
@@ -48,9 +48,21 @@ export default function Modal({ project, onClose }) {
     };
   }, []);
 
-  // Load revision history automatically on modal open
+  // Load revision history + auto-acknowledge QC on modal open
   useEffect(() => {
     loadRevisionHistory();
+
+    // Auto-acknowledge QC when admin opens the modal
+    if (
+      project.status === 'in_quality_control' &&
+      project.qcAcknowledged === false &&
+      isAdmin()
+    ) {
+      updateDoc(doc(db, 'proofs', project.id), {
+        qcAcknowledged: true,
+        updatedAt: serverTimestamp(),
+      }).catch(err => console.error('Error acknowledging QC:', err));
+    }
   }, []);
 
   const loadRevisionHistory = async () => {
@@ -287,6 +299,13 @@ export default function Modal({ project, onClose }) {
             <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(project.status)}`}>
               {getStatusLabel(project.status)}
             </span>
+            {/* QC unacknowledged indicator in header */}
+            {project.status === 'in_quality_control' && project.qcAcknowledged === false && (
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#5A3695] text-white flex items-center gap-1">
+                <FlaskConical className="w-4 h-4" />
+                New in QC
+              </span>
+            )}
           </div>
           <button
             className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"

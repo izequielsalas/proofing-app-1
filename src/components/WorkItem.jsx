@@ -1,8 +1,11 @@
 import { useRef } from "react";
-import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck } from "lucide-react";
+import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck, Tag } from "lucide-react";
 
-export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail }) {
+export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail, tags, qcAcknowledged }) {
   const isPDF = fileUrl?.toLowerCase().includes('.pdf');
+
+  // Show QC badge when order is in QC and admin hasn't acknowledged yet
+  const showQCBadge = status === 'in_quality_control' && qcAcknowledged === false;
 
   const getStatusColor = () => {
     switch (status) {
@@ -94,11 +97,19 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
         </div>
 
         {/* Status Badge */}
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
           <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor()}`}>
             {getStatusIcon()}
             {getStatusText()}
           </span>
+
+          {/* QC New Badge */}
+          {showQCBadge && (
+            <span className="px-2 py-1 rounded-full text-xs font-bold bg-[#5A3695] text-white flex items-center gap-1 shadow-sm animate-pulse">
+              <FlaskConical className="w-3 h-3" />
+              New in QC
+            </span>
+          )}
         </div>
       </div>
 
@@ -116,7 +127,6 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             </div>
           )}
 
-          {/* ⭐ NEW: Show uploader email */}
           {uploaderEmail && (
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 flex-shrink-0 text-gray-400" />
@@ -133,6 +143,23 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             <FileText className="w-4 h-4 flex-shrink-0" />
             <span>{isPDF ? 'PDF Document' : 'Image File'}</span>
           </div>
+
+          {/* Tags */}
+          {tags?.length > 0 && (
+            <div className="flex items-start gap-2 flex-wrap">
+              <Tag className="w-4 h-4 flex-shrink-0 mt-0.5 text-gray-400" />
+              <div className="flex flex-wrap gap-1">
+                {tags.map(tag => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-cesar-navy/10 text-cesar-navy"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action indicator */}
@@ -156,7 +183,9 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             {status === 'in_quality_control' && (
               <div className="flex items-center gap-1">
                 <FlaskConical className="w-3 h-3 text-cesar-purple" />
-                <span className="text-xs text-[#5A3695] font-medium">Quality Control</span>
+                <span className="text-xs text-[#5A3695] font-medium">
+                  {showQCBadge ? 'Needs Review' : 'Quality Control'}
+                </span>
               </div>
             )}
             {status === 'completed' && (

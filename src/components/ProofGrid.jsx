@@ -28,7 +28,7 @@ function groupProofsByChain(proofs) {
   return Array.from(chainMap.values());
 }
 
-// ─── Revision thumbnail (used for the cards peeking behind) ──────────────────
+// ─── Revision thumbnail ───────────────────────────────────────────────────────
 function RevisionThumbnail({ proof }) {
   const isPDF = proof?.fileUrl?.toLowerCase().includes(".pdf");
 
@@ -42,9 +42,7 @@ function RevisionThumbnail({ proof }) {
         src={proof.thumbnailUrl}
         alt="Previous revision"
         className="w-full h-full object-cover opacity-80"
-        onError={(e) => {
-          e.target.style.display = "none";
-        }}
+        onError={(e) => { e.target.style.display = "none"; }}
       />
     );
   }
@@ -62,9 +60,7 @@ function RevisionThumbnail({ proof }) {
       src={proof.fileUrl}
       alt="Previous revision"
       className="w-full h-full object-cover opacity-80"
-      onError={(e) => {
-        e.target.style.display = "none";
-      }}
+      onError={(e) => { e.target.style.display = "none"; }}
     />
   );
 }
@@ -116,6 +112,8 @@ function StackedCard({ group, onOpen }) {
           revisionNumber={latest.revisionNumber}
           parentProofId={latest.parentProofId}
           uploaderEmail={latest.uploaderEmail}
+          tags={latest.tags}
+          qcAcknowledged={latest.qcAcknowledged}
         />
       </div>
 
