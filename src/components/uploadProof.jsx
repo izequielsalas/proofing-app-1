@@ -1,4 +1,4 @@
-// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection + tags
+// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection + tags + invoice number
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -10,6 +10,7 @@ import { Upload, File, X, CheckCircle, AlertCircle, ChevronDown, Tag } from 'luc
 export default function UploadProof({ onUploadComplete, revisionMode = false, parentProof = null }) {
   const [files, setFiles] = useState([]);
   const [projectTitle, setProjectTitle] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -47,6 +48,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   useEffect(() => {
     if (revisionMode && parentProof) {
       setProjectTitle(parentProof.title || '');
+      setInvoiceNumber(parentProof.invoiceNumber || '');
       addDebugLog(`🔄 Revision mode active — chain: ${parentProof.revisionChainId || parentProof.id}`);
     }
   }, [revisionMode, parentProof]);
@@ -332,6 +334,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           fileSize: file.size,
           status: 'pending',
           tags: selectedTags,
+          invoiceNumber: invoiceNumber.trim() || null,
           notes: notes.trim(),
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
@@ -352,6 +355,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           fileSize: file.size,
           status: 'pending',
           tags: selectedTags,
+          invoiceNumber: invoiceNumber.trim() || null,
           notes: notes.trim(),
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
@@ -374,10 +378,9 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         setUploadProgress(prev => ({ ...prev, [i]: { status: 'complete', progress: 100 } }));
       }
 
-      // ⭐ FIXED: removed frontend email call — handleNewProof Cloud Function handles all notifications
-
       setFiles([]);
       setProjectTitle('');
+      setInvoiceNumber('');
       setSelectedClientId('');
       setSelectedClientLabel('');
       setClientSearch('');
@@ -446,22 +449,37 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         )}
       </div>
 
-      {/* Project Title */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Project Title {!revisionMode && '*'}
-        </label>
-        <input
-          type="text"
-          value={projectTitle}
-          onChange={(e) => setProjectTitle(e.target.value)}
-          placeholder="Enter project or job title"
-          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy disabled:bg-gray-50 disabled:text-gray-500"
-          disabled={uploading || revisionMode}
-        />
-        {revisionMode && (
-          <p className="text-xs text-gray-500 mt-1">Title is inherited from the original proof.</p>
-        )}
+      {/* Project Title + Invoice Number */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Project Title {!revisionMode && '*'}
+          </label>
+          <input
+            type="text"
+            value={projectTitle}
+            onChange={(e) => setProjectTitle(e.target.value)}
+            placeholder="Enter project or job title"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy disabled:bg-gray-50 disabled:text-gray-500"
+            disabled={uploading || revisionMode}
+          />
+          {revisionMode && (
+            <p className="text-xs text-gray-500 mt-1">Title is inherited from the original proof.</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Invoice Number <span className="text-gray-400 font-normal">(Optional)</span>
+          </label>
+          <input
+            type="text"
+            value={invoiceNumber}
+            onChange={(e) => setInvoiceNumber(e.target.value)}
+            placeholder="e.g. 303241"
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy disabled:bg-gray-50 disabled:text-gray-500"
+            disabled={uploading}
+          />
+        </div>
       </div>
 
       {/* Client Assignment — combobox */}

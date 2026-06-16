@@ -41,6 +41,10 @@ export default function Modal({ project, onClose }) {
   const [editingTags, setEditingTags] = useState(false);
   const [savingTag, setSavingTag] = useState(false);
 
+  const [invoiceNumber, setInvoiceNumber] = useState(project.invoiceNumber || '');
+  const [editingInvoice, setEditingInvoice] = useState(false);
+  const [savingInvoice, setSavingInvoice] = useState(false);
+
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
   const currentRevisionNumber = project.revisionNumber || 1;
@@ -127,6 +131,22 @@ export default function Modal({ project, onClose }) {
       alert('Failed to update tags. Please try again.');
     } finally {
       setSavingTag(false);
+    }
+  };
+
+    const handleSaveInvoice = async () => {
+    setSavingInvoice(true);
+    try {
+      await updateDoc(doc(db, 'proofs', project.id), {
+        invoiceNumber: invoiceNumber.trim() || null,
+        updatedAt: serverTimestamp(),
+      });
+      setEditingInvoice(false);
+    } catch (err) {
+      console.error('Error saving invoice number:', err);
+      alert('Failed to save invoice number. Please try again.');
+    } finally {
+      setSavingInvoice(false);
     }
   };
 
@@ -463,6 +483,47 @@ export default function Modal({ project, onClose }) {
                   </p>
                 </div>
               )}
+              <div className="col-span-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600">Invoice #:</span>
+                  {canEditTags && !editingInvoice && (
+                    <button
+                      onClick={() => setEditingInvoice(true)}
+                      className="text-gray-400 hover:text-cesar-navy transition-colors"
+                      title="Edit invoice number"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                  )}
+                </div>
+                {editingInvoice ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="text"
+                      value={invoiceNumber}
+                      onChange={e => setInvoiceNumber(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveInvoice(); if (e.key === 'Escape') setEditingInvoice(false); }}
+                      placeholder="e.g. INV-1042"
+                      autoFocus
+                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy"
+                    />
+                    <button
+                      onClick={handleSaveInvoice}
+                      disabled={savingInvoice}
+                      className="p-1.5 bg-cesar-navy text-white rounded-lg hover:bg-[#003070] disabled:opacity-50"
+                    >
+                      {savingInvoice ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <Check size={13} />}
+                    </button>
+                    <button onClick={() => setEditingInvoice(false)} className="p-1.5 text-gray-400 hover:text-gray-600">
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-gray-900 mt-0.5">
+                    {invoiceNumber || <span className="text-gray-400 italic">Not set</span>}
+                  </p>
+                )}
+              </div>
               {isRevision && (
                 <div>
                   <span className="font-medium text-gray-600">Revision:</span>
