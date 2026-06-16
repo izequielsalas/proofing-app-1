@@ -1,8 +1,9 @@
 const { onCall, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { getAuth } = require("firebase-admin/auth");
 const { defineSecret } = require("firebase-functions/params");
@@ -18,6 +19,9 @@ const resendApiKey = defineSecret("RESEND_API_KEY");
 const FROM_EMAIL = 'noreply@s-proof.app';
 const ADMIN_EMAIL = 'isaac@s-proof.app';
 const FRONTEND_URL = 'https://proofingapp1.web.app';
+
+const REMINDER_1_HOURS = 24;  // First reminder after 24 hours
+const REMINDER_2_HOURS = 72;  // Second reminder after 72 hours
 
 // =============================================================================
 // EMAIL TEMPLATES
@@ -145,6 +149,45 @@ const getSimpleProductionStatusTemplate = (data) => {
     </div>
     <div style="margin-top:40px; padding-top:20px; border-top:1px solid #e5e5e5; text-align:center; color:#999999; font-size:12px;">
       <p style="margin:5px 0;">You're receiving this because you have an active project with Cesar Graphics.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+};
+
+const getProofReminderTemplate = (data) => {
+  const { clientName, title, loginUrl, reminderNumber } = data;
+
+  const isSecondReminder = reminderNumber === 2;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; font-family:Arial,sans-serif; background-color:#f5f5f5;">
+  <div style="max-width:600px; margin:20px auto; background-color:#ffffff; padding:30px; border-radius:8px;">
+    <div style="text-align:center; margin-bottom:30px;">
+      <h1 style="color:#1a1a1a; font-size:24px; margin:0;">Cesar Graphics</h1>
+      <p style="color:#666666; font-size:14px; margin:10px 0 0 0;">Your Local Print Shop</p>
+    </div>
+    <div style="color:#333333; font-size:16px; line-height:1.6;">
+      <p>Hi ${clientName || 'there'},</p>
+      <p>${isSecondReminder
+        ? 'We wanted to follow up — your proof is still waiting for your review.'
+        : 'Just a friendly reminder that your proof is ready and waiting for your approval.'
+      }</p>
+      <p><strong>Proof:</strong> ${title}</p>
+      <p>Please take a moment to review it and let us know if it looks good or if any changes are needed. Your approval helps us keep your order on schedule.</p>
+      <p><strong>Review your proof here:</strong><br>
+      <a href="${loginUrl}" style="color:#0066cc; text-decoration:none;">${loginUrl}</a></p>
+      <p style="margin-top:30px;">Questions? Just reply to this email.</p>
+      <p style="margin-top:20px;">Best regards,<br>
+      <strong>The Cesar Graphics Team</strong></p>
+    </div>
+    <div style="margin-top:40px; padding-top:20px; border-top:1px solid #e5e5e5; text-align:center; color:#999999; font-size:12px;">
+      <p style="margin:5px 0;">You're receiving this because you have a proof awaiting your review at Cesar Graphics.</p>
     </div>
   </div>
 </body>
@@ -491,13 +534,10 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
       // ── Client notifications ──────────────────────────────────
       const shouldNotifyClient = (() => {
-        // in_production — only if triggered by designer or admin, not production user
         if (status === 'in_production') {
           return updatedByRole === 'designer' || updatedByRole === 'admin';
         }
-        // completed — always notify
         if (status === 'completed') return true;
-        // everything else — no client email
         return false;
       })();
 
@@ -520,6 +560,120 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
     } catch (error) {
       console.error('❌ Error in handleProofStatusChange:', error);
+    }
+  }
+);
+
+// =============================================================================
+// PENDING PROOF REMINDER — runs every 24 hours
+// Sends reminder #1 at 24h, reminder #2 at 72h, then stops
+// =============================================================================
+
+exports.sendPendingProofReminders = onSchedule(
+  {
+    schedule: 'every 24 hours',
+    secrets: [resendApiKey],
+  },
+  async () => {
+    console.log('⏰ Running pending proof reminder job...');
+
+    const now = Date.now();
+    const hour = 60 * 60 * 1000;
+
+    try {
+      const resend = new Resend(resendApiKey.value());
+
+      // Fetch all pending proofs that have a client email
+      const snapshot = await db.collection('proofs')
+        .where('status', '==', 'pending')
+        .where('clientEmail', '!=', '')
+        .get();
+
+      if (snapshot.empty) {
+        console.log('ℹ️ No pending proofs found.');
+        return;
+      }
+
+      console.log(`📋 Found ${snapshot.size} pending proofs to check.`);
+
+      let sent = 0;
+      let skipped = 0;
+
+      for (const docSnap of snapshot.docs) {
+        const proof = docSnap.data();
+        const proofId = docSnap.id;
+
+        // Skip if no createdAt
+        if (!proof.createdAt) { skipped++; continue; }
+
+        const createdAt = proof.createdAt.toDate
+          ? proof.createdAt.toDate().getTime()
+          : new Date(proof.createdAt).getTime();
+
+        const ageHours = (now - createdAt) / hour;
+        const reminderCount = proof.reminderCount || 0;
+        const lastReminderSentAt = proof.lastReminderSentAt
+          ? (proof.lastReminderSentAt.toDate
+              ? proof.lastReminderSentAt.toDate().getTime()
+              : new Date(proof.lastReminderSentAt).getTime())
+          : null;
+
+        // Already sent max reminders — skip
+        if (reminderCount >= 2) { skipped++; continue; }
+
+        // Determine if we should send a reminder
+        let shouldSend = false;
+        let nextReminderNumber = reminderCount + 1;
+
+        if (reminderCount === 0 && ageHours >= REMINDER_1_HOURS) {
+          // Never sent a reminder and proof is 24+ hours old
+          shouldSend = true;
+        } else if (reminderCount === 1 && ageHours >= REMINDER_2_HOURS) {
+          // Sent one reminder already, proof is 72+ hours old
+          // Also make sure at least 24 hours have passed since last reminder
+          const hoursSinceLastReminder = lastReminderSentAt ? (now - lastReminderSentAt) / hour : 999;
+          shouldSend = hoursSinceLastReminder >= 24;
+        }
+
+        if (!shouldSend) { skipped++; continue; }
+
+        // Skip proofs assigned to invited (not yet active) clients
+        if (proof.clientStatus === 'invited') { skipped++; continue; }
+
+        try {
+          await resend.emails.send({
+            from: FROM_EMAIL,
+            to: proof.clientEmail,
+            subject: nextReminderNumber === 1
+              ? `Reminder: Your proof is waiting for review — ${proof.title}`
+              : `Final reminder: Your proof still needs your approval — ${proof.title}`,
+            html: getProofReminderTemplate({
+              clientName: proof.clientName || 'there',
+              title: proof.title,
+              loginUrl: FRONTEND_URL + '/auth',
+              reminderNumber: nextReminderNumber,
+            }),
+            text: `Hi ${proof.clientName || 'there'}! Your proof "${proof.title}" is still waiting for your review. Visit: ${FRONTEND_URL}/auth`,
+          });
+
+          // Update proof doc with reminder tracking
+          await docSnap.ref.update({
+            reminderCount: nextReminderNumber,
+            lastReminderSentAt: FieldValue.serverTimestamp(),
+          });
+
+          console.log(`✅ Reminder #${nextReminderNumber} sent for proof ${proofId} (${proof.title})`);
+          sent++;
+
+        } catch (emailErr) {
+          console.error(`❌ Failed to send reminder for proof ${proofId}:`, emailErr.message);
+        }
+      }
+
+      console.log(`📊 Reminder job complete — sent: ${sent}, skipped: ${skipped}`);
+
+    } catch (error) {
+      console.error('❌ Error in sendPendingProofReminders:', error);
     }
   }
 );
@@ -640,6 +794,7 @@ exports.healthCheck = onRequest(async (req, res) => {
       'createStaffUser',
       'handleNewProof',
       'handleProofStatusChange',
+      'sendPendingProofReminders',
       'generatePdfThumbnail',
       'healthCheck'
     ]
