@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientFilter, setClientFilter] = useState('all');
   const [showUpload, setShowUpload] = useState(false);
   const [stats, setStats] = useState({ pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 });
 
@@ -81,7 +82,6 @@ export default function Dashboard() {
       return unsub;
 
     } else if (isDesigner()) {
-        // Guard: if uid is missing the where() call will throw
       if (!userProfile.uid) {
         console.warn('Designer profile is missing uid — cannot load proofs');
         return;
@@ -123,29 +123,38 @@ export default function Dashboard() {
     setStats(calcStats(allChains));
   }, [allChains]);
 
+  // ─── Unique client list for filter dropdown (admin only) ──────────────────
+  const uniqueClients = useMemo(() => {
+    const names = new Set();
+    proofs.forEach(p => { if (p.clientName) names.add(p.clientName); });
+    return Array.from(names).sort();
+  }, [proofs]);
+
   const filteredChains = useMemo(() => {
     return allChains
       .filter((group) => {
         const latest = group[0];
         const matchesFilter = filter === 'all' || latest.status === filter;
+        const matchesClient = clientFilter === 'all' || latest.clientName === clientFilter;
         const matchesSearch =
           searchTerm === '' ||
           group.some((proof) => {
             const term = searchTerm.toLowerCase();
-            return (
-              proof.id.toLowerCase().includes(term) ||
-              proof.title?.toLowerCase().includes(term) ||
-              proof.clientName?.toLowerCase().includes(term)
-            );
+              return (
+                proof.id.toLowerCase().includes(term) ||
+                proof.title?.toLowerCase().includes(term) ||
+                proof.clientName?.toLowerCase().includes(term) ||
+                proof.invoiceNumber?.toLowerCase().includes(term)
+              );
           });
-        return matchesFilter && matchesSearch;
+        return matchesFilter && matchesSearch && matchesClient;
       })
       .sort((a, b) => {
         const aTime = a[0].createdAt?.toDate?.() || new Date(0);
         const bTime = b[0].createdAt?.toDate?.() || new Date(0);
         return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
       });
-  }, [allChains, filter, searchTerm, sortOrder]);
+  }, [allChains, filter, searchTerm, sortOrder, clientFilter]);
 
   const filteredProofs = useMemo(
     () => filteredChains.flat(),
@@ -190,8 +199,6 @@ export default function Dashboard() {
   };
 
   // ─── Guards ──────────────────────────────────────────────────────────────────
-
-  // Still loading profile
   if (!currentUser || !userProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -203,7 +210,6 @@ export default function Dashboard() {
     );
   }
 
-  // Unknown role or deactivated account — redirect to unauthorized page
   if (!KNOWN_ROLES.includes(userProfile.role) || userProfile.isActive === false) {
     return <Navigate to="/unauthorized" replace />;
   }
@@ -279,7 +285,9 @@ export default function Dashboard() {
         {/* Controls */}
         <div className="bg-white rounded-lg shadow p-6 mb-8">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center flex-wrap">
+
+              {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <input
@@ -290,6 +298,8 @@ export default function Dashboard() {
                   className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
                 />
               </div>
+
+              {/* Status filter */}
               <div className="flex items-center gap-2">
                 <Filter size={16} className="text-gray-400" />
                 <select
@@ -306,6 +316,8 @@ export default function Dashboard() {
                   <option value="completed">Completed</option>
                 </select>
               </div>
+
+              {/* Sort */}
               <div className="flex items-center gap-2">
                 <ArrowUpDown size={16} className="text-gray-400" />
                 <select
@@ -317,7 +329,25 @@ export default function Dashboard() {
                   <option value="asc">Oldest First</option>
                 </select>
               </div>
+
+              {/* Client filter — admin only */}
+              {isAdmin() && uniqueClients.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-gray-400" />
+                  <select
+                    value={clientFilter}
+                    onChange={(e) => setClientFilter(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cesar-navy focus:border-cesar-navy"
+                  >
+                    <option value="all">All Clients</option>
+                    {uniqueClients.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
+
             {hasPermission('canUploadProofs') && !showUpload && (
               <button
                 onClick={() => setShowUpload(true)}
@@ -328,6 +358,7 @@ export default function Dashboard() {
               </button>
             )}
           </div>
+
           {showUpload && hasPermission('canUploadProofs') && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <UploadProof onUploadComplete={() => setShowUpload(false)} />
@@ -355,8 +386,9 @@ export default function Dashboard() {
         <div className="mb-4">
           <p className="text-sm text-gray-600">
             Showing {filteredChains.length} of {stats.total} {stats.total === 1 ? 'job' : 'jobs'}
-            {filter !== 'all' && ` (filtered by ${filter.replace(/_/g, ' ')})`}
-            {searchTerm && ` (searched for "${searchTerm}")`}
+            {filter !== 'all' && ` · filtered by ${filter.replace(/_/g, ' ')}`}
+            {clientFilter !== 'all' && ` · client: ${clientFilter}`}
+            {searchTerm && ` · search: "${searchTerm}"`}
           </p>
         </div>
 
