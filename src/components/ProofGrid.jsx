@@ -185,6 +185,7 @@ export default function ProofGrid({ proofs = [] }) {
             key="modal"
             project={activeProof}
             onClose={() => setActiveProof(null)}
+            onNavigate={setActiveProof}
           />
         )}
       </AnimatePresence>

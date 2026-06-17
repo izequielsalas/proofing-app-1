@@ -1,4 +1,4 @@
-// src/components/Modal.jsx - Revision System + Notes + Tags + QC + Print Specs + Fulfillment + Progress Bar
+// src/components/Modal.jsx - Revision System + Notes + Tags + QC + Print Specs + Fulfillment + Progress Bar + Order History
 import { motion, AnimatePresence } from "framer-motion";
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion, getDoc } from "firebase/firestore";
@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp,
   Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag, Edit2,
-  ClipboardList, Store, Truck, FileCheck, CheckCircle2
+  ClipboardList, Store, Truck, FileCheck, CheckCircle2, History, User, FileText
 } from "lucide-react";
 import UploadProof from "./uploadProof";
 import { pdfjs } from 'react-pdf';
@@ -41,10 +41,9 @@ function getProgressStages(fulfillment) {
 }
 
 function getStageIndex(status, stages) {
-  // Map actual status to stage index
   const statusToStageKey = {
     pending: 'pending',
-    declined: 'pending', // declined sits at the same point as pending visually
+    declined: 'pending',
     approved: 'approved',
     in_production: 'in_production',
     in_quality_control: 'in_quality_control',
@@ -112,7 +111,7 @@ function ProgressBar({ status, fulfillment }) {
   );
 }
 
-export default function Modal({ project, onClose }) {
+export default function Modal({ project, onClose, onNavigate }) {
   const stopPropagation = (e) => e.stopPropagation();
   const isPDF = project.fileUrl?.toLowerCase().includes('.pdf');
   const { hasPermission, userProfile, isAdmin, isDesigner, isProduction, isClient } = useAuth();
@@ -160,10 +159,35 @@ export default function Modal({ project, onClose }) {
   const [savingSpecs, setSavingSpecs] = useState(false);
   const [specsSaved, setSpecsSaved] = useState(false);
 
+  // ── Order history panel state ──────────────────────────────────
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [clientOrders, setClientOrders] = useState([]);
+  const [loadingClientOrders, setLoadingClientOrders] = useState(false);
+  const [clientOrdersError, setClientOrdersError] = useState(null);
+
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
   const currentRevisionNumber = project.revisionNumber || 1;
   const canEdit = isAdmin() || isDesigner();
+  const canViewClientHistory = isAdmin() || isDesigner();
+
+  // Reset local state whenever the displayed project changes (navigation)
+  useEffect(() => {
+    setProofNotes(project.notes_list || []);
+    setCurrentTags(project.tags || []);
+    setInvoiceNumber(project.invoiceNumber || '');
+    setSpecs({
+      size: '', quantity: '', material: '', finish: 'None', colors: 'Full Color',
+      dueDate: '', specialInstructions: '', ...project.printSpecs,
+    });
+    setFulfillment(project.fulfillment || '');
+    setEstimatedCompletionDate(project.estimatedCompletionDate || '');
+    setShowSpecsPanel(false);
+    setShowHistoryPanel(false);
+    setShowCommentBox(false);
+    setNotes('');
+    setDeclineError('');
+  }, [project.id]);
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -196,7 +220,7 @@ export default function Modal({ project, onClose }) {
       }
     };
     fetchTags();
-  }, []);
+  }, [project.id]);
 
   const loadRevisionHistory = async () => {
     setLoadingHistory(true);
@@ -217,6 +241,44 @@ export default function Modal({ project, onClose }) {
       setHistoryError(error.message);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  // ── Order history for this client ───────────────────────────
+  const handleOpenClientHistory = async () => {
+    setShowSpecsPanel(false);
+    setShowHistoryPanel(true);
+    setLoadingClientOrders(true);
+    setClientOrdersError(null);
+    try {
+      const q = query(
+        collection(db, 'proofs'),
+        where('clientId', '==', project.clientId)
+      );
+      const snapshot = await getDocs(q);
+      const orders = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.() || new Date(0);
+          const bTime = b.createdAt?.toDate?.() || new Date(0);
+          return bTime - aTime;
+        });
+      setClientOrders(orders);
+    } catch (err) {
+      console.error('Error loading client order history:', err);
+      setClientOrdersError(err.message);
+    } finally {
+      setLoadingClientOrders(false);
+    }
+  };
+
+  const handleNavigateToOrder = (order) => {
+    if (order.id === project.id) {
+      setShowHistoryPanel(false);
+      return;
+    }
+    if (onNavigate) {
+      onNavigate(order);
     }
   };
 
@@ -420,6 +482,14 @@ export default function Modal({ project, onClose }) {
     } catch { return 'Unknown'; }
   };
 
+  const formatShortListDate = (timestamp) => {
+    if (!timestamp) return '—';
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return '—'; }
+  };
+
   const formatNoteDate = (isoString) => {
     if (!isoString) return '';
     try {
@@ -438,7 +508,6 @@ export default function Modal({ project, onClose }) {
   const hasRevisionHistory = revisionHistory.length > 0;
   const showRevisionSection = hasRevisionHistory || isRevision || loadingHistory;
   const hasSpecs = project.printSpecs && Object.values(project.printSpecs).some(v => v && v !== 'None' && v !== 'Full Color');
-  const showProgressBar = !['declined'].includes(project.status) || true; // always show; declined gets special note
 
   return (
     <motion.div
@@ -453,11 +522,12 @@ export default function Modal({ project, onClose }) {
 
         {/* Main Modal */}
         <motion.div
+          key={project.id}
           className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.97, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.2 }}
         >
           {/* Header */}
           <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-center rounded-t-xl flex-shrink-0">
@@ -570,7 +640,17 @@ export default function Modal({ project, onClose }) {
                 {project.clientName && (
                   <div>
                     <span className="font-medium text-gray-600">Client:</span>
-                    <p className="text-gray-900">{project.clientName}</p>
+                    {canViewClientHistory ? (
+                      <button
+                        onClick={handleOpenClientHistory}
+                        className="block text-cesar-navy hover:text-[#003d73] hover:underline font-medium transition-colors"
+                        title="View order history for this client"
+                      >
+                        {project.clientName}
+                      </button>
+                    ) : (
+                      <p className="text-gray-900">{project.clientName}</p>
+                    )}
                   </div>
                 )}
                 {(project.updatedAt || project.responseAt) && (
@@ -794,7 +874,7 @@ export default function Modal({ project, onClose }) {
 
             {/* Details button — all roles */}
             <button
-              onClick={() => setShowSpecsPanel(true)}
+              onClick={() => { setShowHistoryPanel(false); setShowSpecsPanel(true); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
                 hasSpecs ? 'bg-cesar-navy/10 text-cesar-navy hover:bg-cesar-navy/20' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
@@ -831,7 +911,6 @@ export default function Modal({ project, onClose }) {
               </button>
             )}
 
-            {/* Ready for Pickup / Out for Delivery — admin/designer only, based on fulfillment */}
             {project.status === 'in_quality_control' && (isAdmin() || isDesigner()) && (
               project.fulfillment === 'delivery' ? (
                 <button onClick={() => handleAdvanceStatus('out_for_delivery')} disabled={isLoading}
@@ -1065,6 +1144,90 @@ export default function Modal({ project, onClose }) {
                   </button>
                 </div>
               )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Order History Slide-out Panel ───────────────────── */}
+        <AnimatePresence>
+          {showHistoryPanel && (
+            <motion.div
+              className="absolute right-4 top-4 bottom-4 w-96 bg-white rounded-xl shadow-2xl flex flex-col border border-gray-200 z-10"
+              initial={{ x: 420, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 420, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              onClick={stopPropagation}
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-cesar-navy" />
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Order History</h3>
+                    <p className="text-xs text-gray-500">{project.clientName}</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowHistoryPanel(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                  <X size={18} className="text-gray-500" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {loadingClientOrders ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cesar-navy"></div>
+                  </div>
+                ) : clientOrdersError ? (
+                  <div className="text-sm text-red-600 p-3 bg-red-50 rounded-lg m-2">
+                    Could not load order history: {clientOrdersError}
+                  </div>
+                ) : clientOrders.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <FileText className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-400">No orders found for this client.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-gray-400 px-2 pb-1">
+                      {clientOrders.length} order{clientOrders.length !== 1 ? 's' : ''}
+                    </p>
+                    {clientOrders.map(order => {
+                      const isCurrent = order.id === project.id;
+                      return (
+                        <button
+                          key={order.id}
+                          onClick={() => handleNavigateToOrder(order)}
+                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                            isCurrent
+                              ? 'bg-cesar-navy/5 border-cesar-navy/30'
+                              : 'bg-white border-gray-200 hover:border-cesar-navy/30 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-900 line-clamp-1">
+                              {order.title || `Proof #${order.id.slice(-6)}`}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-medium text-cesar-navy bg-cesar-navy/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                Viewing
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getStatusColor(order.status)}`}>
+                              {getStatusLabel(order.status)}
+                            </span>
+                            <span className="text-xs text-gray-400">{formatShortListDate(order.createdAt)}</span>
+                            {order.invoiceNumber && (
+                              <span className="text-xs text-gray-400">· #{order.invoiceNumber}</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
