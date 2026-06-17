@@ -1,11 +1,18 @@
-import { useRef } from "react";
-import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck, Tag } from "lucide-react";
+import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck, Tag, AlertCircle } from "lucide-react";
 
 export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail, tags, qcAcknowledged }) {
   const isPDF = fileUrl?.toLowerCase().includes('.pdf');
 
   // Show QC badge when order is in QC and admin hasn't acknowledged yet
   const showQCBadge = status === 'in_quality_control' && qcAcknowledged === false;
+
+  // Show overdue badge when proof has been pending for 48+ hours
+  const isOverdue = status === 'pending' && (() => {
+    if (!createdAt) return false;
+    const created = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+    const hoursPending = (Date.now() - created.getTime()) / (1000 * 60 * 60);
+    return hoursPending >= 48;
+  })();
 
   const getStatusColor = () => {
     switch (status) {
@@ -96,7 +103,7 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
           </div>
         </div>
 
-        {/* Status Badge */}
+        {/* Badges — stacked top right */}
         <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
           <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor()}`}>
             {getStatusIcon()}
@@ -108,6 +115,14 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             <span className="px-2 py-1 rounded-full text-xs font-bold bg-[#5A3695] text-white flex items-center gap-1 shadow-sm animate-pulse">
               <FlaskConical className="w-3 h-3" />
               New in QC
+            </span>
+          )}
+
+          {/* Overdue Badge */}
+          {isOverdue && (
+            <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-600 text-white flex items-center gap-1 shadow-sm animate-pulse">
+              <AlertCircle className="w-3 h-3" />
+              Overdue
             </span>
           )}
         </div>
@@ -170,8 +185,14 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             </span>
             {status === 'pending' && (
               <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3 text-cesar-yellow" />
-                <span className="text-xs text-[#92690B] font-medium">Needs Review</span>
+                {isOverdue ? (
+                  <AlertCircle className="w-3 h-3 text-red-600" />
+                ) : (
+                  <Clock className="w-3 h-3 text-cesar-yellow" />
+                )}
+                <span className={`text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-[#92690B]'}`}>
+                  {isOverdue ? 'Overdue' : 'Needs Review'}
+                </span>
               </div>
             )}
             {status === 'in_production' && (
