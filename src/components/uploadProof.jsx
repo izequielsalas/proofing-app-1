@@ -1,4 +1,4 @@
-// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection + tags + invoice number
+// src/components/uploadProof.jsx - UPDATED: Revision mode support + invitations collection + tags + invoice number + fulfillment
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { collection, addDoc, updateDoc, doc, serverTimestamp, query, where, getDocs, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -11,6 +11,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   const [files, setFiles] = useState([]);
   const [projectTitle, setProjectTitle] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [fulfillment, setFulfillment] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -44,11 +45,12 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     setDebugLog(prev => [...prev, { message: logEntry, type }]);
   };
 
-  // Pre-fill title from parent proof in revision mode
+  // Pre-fill from parent proof in revision mode
   useEffect(() => {
     if (revisionMode && parentProof) {
       setProjectTitle(parentProof.title || '');
       setInvoiceNumber(parentProof.invoiceNumber || '');
+      setFulfillment(parentProof.fulfillment || '');
       addDebugLog(`🔄 Revision mode active — chain: ${parentProof.revisionChainId || parentProof.id}`);
     }
   }, [revisionMode, parentProof]);
@@ -125,7 +127,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     );
   }, [clients, clientSearch]);
 
-  // Reset highlight when filtered list changes
   useEffect(() => {
     setHighlightedIndex(-1);
   }, [filteredClients]);
@@ -141,23 +142,14 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
 
   const handleComboKeyDown = (e) => {
     if (!comboOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'Enter') {
-        setComboOpen(true);
-        e.preventDefault();
-      }
+      if (e.key === 'ArrowDown' || e.key === 'Enter') { setComboOpen(true); e.preventDefault(); }
       return;
     }
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIndex(i => Math.min(i + 1, filteredClients.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') {
       e.preventDefault();
-      setHighlightedIndex(i => Math.min(i + 1, filteredClients.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex(i => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && filteredClients[highlightedIndex]) {
-        selectClient(filteredClients[highlightedIndex]);
-      }
+      if (highlightedIndex >= 0 && filteredClients[highlightedIndex]) selectClient(filteredClients[highlightedIndex]);
     } else if (e.key === 'Escape') {
       setComboOpen(false);
       if (!selectedClientId) setClientSearch('');
@@ -180,7 +172,6 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     inputRef.current?.focus();
   };
 
-  // ── Tag toggle ────────────────────────────────────────────────
   const toggleTag = (tag) => {
     setSelectedTags(prev =>
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
@@ -188,22 +179,14 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
   };
 
   const handleInviteClient = async () => {
-    if (!clientEmail.trim() || !clientName.trim()) {
-      alert('Please enter both client name and email');
-      return;
-    }
+    if (!clientEmail.trim() || !clientName.trim()) { alert('Please enter both client name and email'); return; }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(clientEmail)) {
-      alert('Please enter a valid email');
-      return;
-    }
+    if (!emailRegex.test(clientEmail)) { alert('Please enter a valid email'); return; }
     const existingClient = clients.find(c => c.email?.toLowerCase() === clientEmail.toLowerCase());
     if (existingClient) {
       alert('A client with this email already exists');
       setSelectedClientId(existingClient.id);
-      setClientEmail('');
-      setClientName('');
-      setShowInviteForm(false);
+      setClientEmail(''); setClientName(''); setShowInviteForm(false);
       return;
     }
     setInvitingClient(true);
@@ -231,9 +214,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       const newClient = { id: invitationRef.id, ...invitationData, status: 'invited', _isInvitation: true };
       setClients(prev => [...prev, newClient]);
       selectClient(newClient);
-      setClientEmail('');
-      setClientName('');
-      setShowInviteForm(false);
+      setClientEmail(''); setClientName(''); setShowInviteForm(false);
       addDebugLog(`🎉 Client invitation complete for ${clientName}`);
       alert(`Invitation sent to ${clientName}!`);
     } catch (error) {
@@ -253,9 +234,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const removeFile = (index) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
-  };
+  const removeFile = (index) => setFiles(prev => prev.filter((_, i) => i !== index));
 
   const handleFileSelect = (e) => {
     const selectedFiles = Array.from(e.target.files);
@@ -270,19 +249,14 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       if (!isValidSize) setUploadError(`${file.name} is too large. Maximum file size is 24MB.`);
       return isValidSize;
     });
-    if (revisionMode) {
-      setFiles([validSizedFiles[0]].filter(Boolean));
-    } else {
-      setFiles(prev => [...prev, ...validSizedFiles]);
-    }
+    if (revisionMode) setFiles([validSizedFiles[0]].filter(Boolean));
+    else setFiles(prev => [...prev, ...validSizedFiles]);
   };
 
   const uploadFiles = async () => {
     if (files.length === 0) return alert('Please select at least one file');
     if (!projectTitle.trim()) return alert('Please enter a project title');
-    if (!revisionMode && canAssignProofs() && !selectedClientId) {
-      return alert('Please select a client or invite a new one');
-    }
+    if (!revisionMode && canAssignProofs() && !selectedClientId) return alert('Please select a client or invite a new one');
 
     setUploading(true);
     setDebugLog([]);
@@ -335,6 +309,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           status: 'pending',
           tags: selectedTags,
           invoiceNumber: invoiceNumber.trim() || null,
+          fulfillment: fulfillment || null,
           notes: notes.trim(),
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
@@ -356,6 +331,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           status: 'pending',
           tags: selectedTags,
           invoiceNumber: invoiceNumber.trim() || null,
+          fulfillment: fulfillment || null,
           notes: notes.trim(),
           uploadedBy: user?.uid,
           uploaderEmail: user?.email,
@@ -381,6 +357,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
       setFiles([]);
       setProjectTitle('');
       setInvoiceNumber('');
+      setFulfillment('');
       setSelectedClientId('');
       setSelectedClientLabel('');
       setClientSearch('');
@@ -482,6 +459,31 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         </div>
       </div>
 
+      {/* Fulfillment */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Fulfillment <span className="text-gray-400 font-normal">(Optional)</span>
+        </label>
+        <div className="flex gap-3">
+          {['pickup', 'delivery'].map(option => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setFulfillment(prev => prev === option ? '' : option)}
+              disabled={uploading}
+              className={`flex-1 py-2.5 px-4 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 ${
+                fulfillment === option
+                  ? 'bg-cesar-navy text-white border-cesar-navy'
+                  : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
+              }`}
+            >
+              {option === 'pickup' ? '🏪 Ready for Pickup' : '🚚 Out for Delivery'}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-1">Determines the final step shown on the client progress tracker.</p>
+      </div>
+
       {/* Client Assignment — combobox */}
       {!revisionMode && canAssignProofs() && (
         <div>
@@ -529,9 +531,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                       onMouseDown={() => selectClient(client)}
                       onMouseEnter={() => setHighlightedIndex(index)}
                       className={`px-4 py-2.5 cursor-pointer text-sm ${
-                        index === highlightedIndex
-                          ? 'bg-cesar-navy text-white'
-                          : 'text-gray-800 hover:bg-gray-50'
+                        index === highlightedIndex ? 'bg-cesar-navy text-white' : 'text-gray-800 hover:bg-gray-50'
                       }`}
                     >
                       <span className="font-medium">{client.displayName || client.email}</span>
@@ -548,9 +548,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                     </li>
                   ))
                 ) : (
-                  <li className="px-4 py-3 text-sm text-gray-500">
-                    No clients match "{clientSearch}"
-                  </li>
+                  <li className="px-4 py-3 text-sm text-gray-500">No clients match "{clientSearch}"</li>
                 )}
               </ul>
             )}
@@ -560,38 +558,14 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
             <div className="mt-4 p-4 bg-[#E0EAF5] border border-cesar-navy/20 rounded-lg">
               <h4 className="text-sm font-medium text-cesar-navy mb-3">Invite New Client</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                <input
-                  type="text"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Client name"
-                  className="p-2 border border-cesar-navy/30 rounded focus:ring-2 focus:ring-cesar-navy"
-                  disabled={invitingClient}
-                />
-                <input
-                  type="email"
-                  value={clientEmail}
-                  onChange={(e) => setClientEmail(e.target.value)}
-                  placeholder="Client email"
-                  className="p-2 border border-cesar-navy/30 rounded focus:ring-2 focus:ring-cesar-navy"
-                  disabled={invitingClient}
-                />
+                <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Client name" className="p-2 border border-cesar-navy/30 rounded focus:ring-2 focus:ring-cesar-navy" disabled={invitingClient} />
+                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} placeholder="Client email" className="p-2 border border-cesar-navy/30 rounded focus:ring-2 focus:ring-cesar-navy" disabled={invitingClient} />
               </div>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleInviteClient}
-                  disabled={invitingClient}
-                  className="px-4 py-2 bg-cesar-navy text-white rounded hover:bg-[#003d73] disabled:opacity-50 text-sm"
-                >
+                <button type="button" onClick={handleInviteClient} disabled={invitingClient} className="px-4 py-2 bg-cesar-navy text-white rounded hover:bg-[#003d73] disabled:opacity-50 text-sm">
                   {invitingClient ? 'Sending...' : 'Send Invitation'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowInviteForm(false); setClientName(''); setClientEmail(''); }}
-                  disabled={invitingClient}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm"
-                >
+                <button type="button" onClick={() => { setShowInviteForm(false); setClientName(''); setClientEmail(''); }} disabled={invitingClient} className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm">
                   Cancel
                 </button>
               </div>
@@ -607,11 +581,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
             <Tag className="h-4 w-4 text-gray-500" />
             <label className="block text-sm font-medium text-gray-700">Tags (Optional)</label>
             {selectedTags.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedTags([])}
-                className="ml-auto text-xs text-gray-400 hover:text-gray-600"
-              >
+              <button type="button" onClick={() => setSelectedTags([])} className="ml-auto text-xs text-gray-400 hover:text-gray-600">
                 Clear all
               </button>
             )}
@@ -626,9 +596,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                   onClick={() => toggleTag(tag)}
                   disabled={uploading}
                   className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-50 ${
-                    isSelected
-                      ? 'bg-cesar-navy text-white border-cesar-navy'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
+                    isSelected ? 'bg-cesar-navy text-white border-cesar-navy' : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
                   }`}
                 >
                   {isSelected && <span className="mr-1">✓</span>}
@@ -657,15 +625,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
 
       {/* File Upload Area */}
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-cesar-navy/40 transition-colors">
-        <input
-          type="file"
-          accept="application/pdf"
-          multiple={!revisionMode}
-          ref={fileInputRef}
-          onChange={handleFileSelect}
-          className="hidden"
-          disabled={uploading}
-        />
+        <input type="file" accept="application/pdf" multiple={!revisionMode} ref={fileInputRef} onChange={handleFileSelect} className="hidden" disabled={uploading} />
         <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
         <p className="text-lg font-medium text-gray-900 mb-2">
           {revisionMode ? 'Upload revised file' : 'Drop files here or click to browse'}
@@ -673,12 +633,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         <p className="text-sm text-gray-600 mb-4">
           {revisionMode ? 'Upload one PDF file (replaces previous version)' : 'Supports PDF files up to 24MB'}
         </p>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="px-6 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-6 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors disabled:opacity-50">
           Select {revisionMode ? 'File' : 'Files'}
         </button>
       </div>
@@ -696,9 +651,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                     <File className="h-5 w-5 text-gray-400" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatFileSize(file.size)} • {file.type === 'application/pdf' ? 'PDF' : 'Image'}
-                      </p>
+                      <p className="text-xs text-gray-500">{formatFileSize(file.size)} • {file.type === 'application/pdf' ? 'PDF' : 'Image'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -737,12 +690,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
             disabled={uploading || !projectTitle.trim() || (!revisionMode && canAssignProofs() && !selectedClientId)}
             className="px-6 py-3 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {uploading
-              ? 'Uploading...'
-              : revisionMode
-                ? 'Upload Revision'
-                : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`
-            }
+            {uploading ? 'Uploading...' : revisionMode ? 'Upload Revision' : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`}
           </button>
         )}
       </div>

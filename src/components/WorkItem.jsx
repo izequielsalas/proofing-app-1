@@ -1,4 +1,4 @@
-import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck, Tag, AlertCircle } from "lucide-react";
+import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck, Tag, AlertCircle, Store, Truck } from "lucide-react";
 
 export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail, tags, qcAcknowledged }) {
   const isPDF = fileUrl?.toLowerCase().includes('.pdf');
@@ -20,6 +20,8 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
       case 'declined': return 'bg-[#FCE4EC] text-[#A8005A]';
       case 'in_production': return 'bg-[#FFF0E0] text-[#B34D00]';
       case 'in_quality_control': return 'bg-[#EDE7F6] text-[#5A3695]';
+      case 'ready_for_pickup': return 'bg-[#DFF7F5] text-[#0A6B6B]';
+      case 'out_for_delivery': return 'bg-[#DFF7F5] text-[#0A6B6B]';
       case 'completed': return 'bg-[#E0EAF5] text-[#002855]';
       default: return 'bg-[#D6F0FF] text-[#006699]';
     }
@@ -31,6 +33,8 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
       case 'declined': return 'Declined';
       case 'in_production': return 'In Production';
       case 'in_quality_control': return 'In QC';
+      case 'ready_for_pickup': return 'Ready for Pickup';
+      case 'out_for_delivery': return 'Out for Delivery';
       case 'completed': return 'Completed';
       default: return 'Pending Review';
     }
@@ -40,6 +44,8 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
     switch (status) {
       case 'in_production': return <Factory className="w-3 h-3" />;
       case 'in_quality_control': return <FlaskConical className="w-3 h-3" />;
+      case 'ready_for_pickup': return <Store className="w-3 h-3" />;
+      case 'out_for_delivery': return <Truck className="w-3 h-3" />;
       case 'completed': return <PackageCheck className="w-3 h-3" />;
       default: return null;
     }
@@ -207,6 +213,18 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
                 <span className="text-xs text-[#5A3695] font-medium">
                   {showQCBadge ? 'Needs Review' : 'Quality Control'}
                 </span>
+              </div>
+            )}
+            {status === 'ready_for_pickup' && (
+              <div className="flex items-center gap-1">
+                <Store className="w-3 h-3 text-[#0A6B6B]" />
+                <span className="text-xs text-[#0A6B6B] font-medium">Ready for Pickup</span>
+              </div>
+            )}
+            {status === 'out_for_delivery' && (
+              <div className="flex items-center gap-1">
+                <Truck className="w-3 h-3 text-[#0A6B6B]" />
+                <span className="text-xs text-[#0A6B6B] font-medium">Out for Delivery</span>
               </div>
             )}
             {status === 'completed' && (

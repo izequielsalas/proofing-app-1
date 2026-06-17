@@ -1,10 +1,14 @@
-// src/components/Modal.jsx - With Revision System + Notes + Tags + QC Acknowledge + Inline Tag Editor + Print Specs Panel
+// src/components/Modal.jsx - Revision System + Notes + Tags + QC + Print Specs + Fulfillment + Progress Bar
 import { motion, AnimatePresence } from "framer-motion";
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
-import { X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp, Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag, Edit2, ClipboardList } from "lucide-react";
+import {
+  X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp,
+  Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag, Edit2,
+  ClipboardList, Store, Truck, FileCheck, CheckCircle2
+} from "lucide-react";
 import UploadProof from "./uploadProof";
 import { pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -17,6 +21,96 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 const FINISH_OPTIONS = ['None', 'Gloss', 'Matte', 'Satin', 'Laminate', 'Other'];
 const COLOR_OPTIONS = ['Full Color', 'Spot Color', 'Black & White', 'Other'];
+
+// ── Progress bar stage definitions ──────────────────────────────
+function getProgressStages(fulfillment) {
+  const fulfillmentStage = fulfillment === 'delivery'
+    ? { key: 'out_for_delivery', label: 'Out for Delivery', icon: Truck }
+    : fulfillment === 'pickup'
+    ? { key: 'ready_for_pickup', label: 'Ready for Pickup', icon: Store }
+    : { key: 'ready', label: 'Ready', icon: Store };
+
+  return [
+    { key: 'pending', label: 'Proof Uploaded', icon: FileCheck },
+    { key: 'approved', label: 'Approved', icon: Check },
+    { key: 'in_production', label: 'In Production', icon: Factory },
+    { key: 'in_quality_control', label: 'Quality Control', icon: FlaskConical },
+    fulfillmentStage,
+    { key: 'completed', label: 'Completed', icon: CheckCircle2 },
+  ];
+}
+
+function getStageIndex(status, stages) {
+  // Map actual status to stage index
+  const statusToStageKey = {
+    pending: 'pending',
+    declined: 'pending', // declined sits at the same point as pending visually
+    approved: 'approved',
+    in_production: 'in_production',
+    in_quality_control: 'in_quality_control',
+    ready_for_pickup: 'ready_for_pickup',
+    out_for_delivery: 'out_for_delivery',
+    completed: 'completed',
+  };
+  const key = statusToStageKey[status] || 'pending';
+  const idx = stages.findIndex(s => s.key === key);
+  return idx === -1 ? 0 : idx;
+}
+
+function ProgressBar({ status, fulfillment }) {
+  const stages = getProgressStages(fulfillment);
+  const currentIndex = getStageIndex(status, stages);
+  const isDeclined = status === 'declined';
+
+  return (
+    <div className="mb-6 px-2">
+      <div className="flex items-center">
+        {stages.map((stage, idx) => {
+          const isComplete = idx < currentIndex;
+          const isActive = idx === currentIndex && !isDeclined;
+          const Icon = stage.icon;
+
+          return (
+            <React.Fragment key={stage.key}>
+              <div className="flex flex-col items-center flex-shrink-0" style={{ width: 'fit-content' }}>
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-colors ${
+                    isComplete
+                      ? 'bg-cesar-green border-cesar-green text-white'
+                      : isActive
+                      ? 'bg-cesar-navy border-cesar-navy text-white'
+                      : 'bg-white border-gray-300 text-gray-300'
+                  }`}
+                >
+                  <Icon size={16} />
+                </div>
+                <span
+                  className={`text-[10px] mt-1.5 text-center leading-tight max-w-[64px] font-medium ${
+                    isComplete ? 'text-cesar-green' : isActive ? 'text-cesar-navy' : 'text-gray-400'
+                  }`}
+                >
+                  {stage.label}
+                </span>
+              </div>
+              {idx < stages.length - 1 && (
+                <div
+                  className={`flex-1 h-0.5 mx-1 mb-5 transition-colors ${
+                    idx < currentIndex ? 'bg-cesar-green' : 'bg-gray-200'
+                  }`}
+                />
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+      {isDeclined && (
+        <p className="text-xs text-[#A8005A] text-center mt-2 font-medium">
+          Changes were requested on this proof — awaiting a revised version.
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function Modal({ project, onClose }) {
   const stopPropagation = (e) => e.stopPropagation();
@@ -49,7 +143,7 @@ export default function Modal({ project, onClose }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
 
-  // ── Print specs panel state ───────────────────────────────────
+  // ── Print specs + fulfillment + est. completion panel state ──
   const [showSpecsPanel, setShowSpecsPanel] = useState(false);
   const [specs, setSpecs] = useState({
     size: '',
@@ -61,6 +155,8 @@ export default function Modal({ project, onClose }) {
     specialInstructions: '',
     ...project.printSpecs,
   });
+  const [fulfillment, setFulfillment] = useState(project.fulfillment || '');
+  const [estimatedCompletionDate, setEstimatedCompletionDate] = useState(project.estimatedCompletionDate || '');
   const [savingSpecs, setSavingSpecs] = useState(false);
   const [specsSaved, setSpecsSaved] = useState(false);
 
@@ -73,9 +169,7 @@ export default function Modal({ project, onClose }) {
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
+    return () => { document.body.style.overflow = originalOverflow; };
   }, []);
 
   // Load revision history + auto-acknowledge QC + fetch available tags
@@ -96,9 +190,7 @@ export default function Modal({ project, onClose }) {
     const fetchTags = async () => {
       try {
         const tagDoc = await getDoc(doc(db, 'settings', 'tags'));
-        if (tagDoc.exists()) {
-          setAvailableTags(tagDoc.data().list || []);
-        }
+        if (tagDoc.exists()) setAvailableTags(tagDoc.data().list || []);
       } catch (err) {
         console.error('Error fetching tags:', err);
       }
@@ -136,10 +228,7 @@ export default function Modal({ project, onClose }) {
       ? currentTags.filter(t => t !== tag)
       : [...currentTags, tag];
     try {
-      await updateDoc(doc(db, 'proofs', project.id), {
-        tags: newTags,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, 'proofs', project.id), { tags: newTags, updatedAt: serverTimestamp() });
       setCurrentTags(newTags);
     } catch (err) {
       console.error('Error updating tags:', err);
@@ -166,19 +255,21 @@ export default function Modal({ project, onClose }) {
     }
   };
 
-  // ── Print specs ───────────────────────────────────────────────
+  // ── Print specs + fulfillment + est. completion (single save) ─
   const handleSaveSpecs = async () => {
     setSavingSpecs(true);
     try {
       await updateDoc(doc(db, 'proofs', project.id), {
         printSpecs: specs,
+        fulfillment: fulfillment || null,
+        estimatedCompletionDate: estimatedCompletionDate || null,
         updatedAt: serverTimestamp(),
       });
       setSpecsSaved(true);
       setTimeout(() => setSpecsSaved(false), 2000);
     } catch (err) {
       console.error('Error saving specs:', err);
-      alert('Failed to save print specs. Please try again.');
+      alert('Failed to save details. Please try again.');
     } finally {
       setSavingSpecs(false);
     }
@@ -294,6 +385,8 @@ export default function Modal({ project, onClose }) {
       case 'declined': return 'text-[#A8005A] bg-[#FCE4EC] border-cesar-magenta';
       case 'in_production': return 'text-[#B34D00] bg-[#FFF0E0] border-cesar-orange';
       case 'in_quality_control': return 'text-[#5A3695] bg-[#EDE7F6] border-cesar-purple';
+      case 'ready_for_pickup': return 'text-[#0A6B6B] bg-[#DFF7F5] border-[#0A6B6B]';
+      case 'out_for_delivery': return 'text-[#0A6B6B] bg-[#DFF7F5] border-[#0A6B6B]';
       case 'completed': return 'text-cesar-navy bg-[#E0EAF5] border-cesar-navy';
       default: return 'text-[#92690B] bg-[#FEF3CD] border-cesar-yellow';
     }
@@ -303,6 +396,8 @@ export default function Modal({ project, onClose }) {
     switch (status) {
       case 'in_production': return 'In Production';
       case 'in_quality_control': return 'In Quality Control';
+      case 'ready_for_pickup': return 'Ready for Pickup';
+      case 'out_for_delivery': return 'Out for Delivery';
       default: return status?.charAt(0).toUpperCase() + status?.slice(1);
     }
   };
@@ -333,11 +428,17 @@ export default function Modal({ project, onClose }) {
     } catch { return ''; }
   };
 
+  const formatShortDate = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+      return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    } catch { return null; }
+  };
+
   const hasRevisionHistory = revisionHistory.length > 0;
   const showRevisionSection = hasRevisionHistory || isRevision || loadingHistory;
-
-  // Check if any specs have been filled in
   const hasSpecs = project.printSpecs && Object.values(project.printSpecs).some(v => v && v !== 'None' && v !== 'Full Color');
+  const showProgressBar = !['declined'].includes(project.status) || true; // always show; declined gets special note
 
   return (
     <motion.div
@@ -348,7 +449,6 @@ export default function Modal({ project, onClose }) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Modal + panel wrapper */}
       <div className="flex items-center justify-center w-full h-full" onClick={stopPropagation}>
 
         {/* Main Modal */}
@@ -389,6 +489,14 @@ export default function Modal({ project, onClose }) {
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-6">
 
+            {/* Progress Bar */}
+            <ProgressBar status={project.status} fulfillment={project.fulfillment} />
+            {project.estimatedCompletionDate && (
+              <p className="text-center text-xs text-gray-500 mb-4 -mt-2">
+                Estimated completion: <span className="font-medium text-gray-700">{formatShortDate(project.estimatedCompletionDate)}</span>
+              </p>
+            )}
+
             {/* Revision History */}
             {showRevisionSection && (
               <div className="mb-6">
@@ -399,9 +507,7 @@ export default function Modal({ project, onClose }) {
                   <GitBranch className="w-4 h-4" />
                   {showHistory ? 'Hide' : 'Show'} Revision History
                   {hasRevisionHistory && (
-                    <span className="px-1.5 py-0.5 bg-cesar-navy text-white text-xs rounded-full">
-                      {revisionHistory.length}
-                    </span>
+                    <span className="px-1.5 py-0.5 bg-cesar-navy text-white text-xs rounded-full">{revisionHistory.length}</span>
                   )}
                   {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
@@ -497,7 +603,7 @@ export default function Modal({ project, onClose }) {
                         value={invoiceNumber}
                         onChange={e => setInvoiceNumber(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') handleSaveInvoice(); if (e.key === 'Escape') setEditingInvoice(false); }}
-                        placeholder="e.g. INV-1042"
+                        placeholder="e.g. 303241"
                         autoFocus
                         className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy"
                       />
@@ -650,33 +756,6 @@ export default function Modal({ project, onClose }) {
               </div>
             </div>
 
-            {/* Production Status Banner */}
-            {['in_production', 'in_quality_control', 'completed'].includes(project.status) && (
-              <div className={`mb-6 p-4 rounded-lg border ${
-                project.status === 'completed' ? 'bg-[#E0EAF5] border-cesar-navy/20'
-                : project.status === 'in_quality_control' ? 'bg-[#EDE7F6] border-cesar-purple/20'
-                : 'bg-[#FFF0E0] border-cesar-orange/20'
-              }`}>
-                <div className="flex items-center gap-3">
-                  {project.status === 'in_production' && <Factory className="w-5 h-5 text-cesar-orange" />}
-                  {project.status === 'in_quality_control' && <FlaskConical className="w-5 h-5 text-cesar-purple" />}
-                  {project.status === 'completed' && <PackageCheck className="w-5 h-5 text-cesar-navy" />}
-                  <div>
-                    <p className={`font-medium text-sm ${
-                      project.status === 'completed' ? 'text-cesar-navy'
-                      : project.status === 'in_quality_control' ? 'text-[#5A3695]'
-                      : 'text-[#B34D00]'
-                    }`}>
-                      {project.status === 'in_production' && 'This proof is currently in production'}
-                      {project.status === 'in_quality_control' && 'This proof is in quality control'}
-                      {project.status === 'completed' && 'This proof has been completed'}
-                    </p>
-                    {project.updatedAt && <p className="text-xs text-gray-500 mt-0.5">Updated {formatDate(project.updatedAt)}</p>}
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Upload Revision */}
             {project.status === 'declined' && hasPermission('canUploadProofs') && (
               <div className="mb-6">
@@ -717,9 +796,7 @@ export default function Modal({ project, onClose }) {
             <button
               onClick={() => setShowSpecsPanel(true)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
-                hasSpecs
-                  ? 'bg-cesar-navy/10 text-cesar-navy hover:bg-cesar-navy/20'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                hasSpecs ? 'bg-cesar-navy/10 text-cesar-navy hover:bg-cesar-navy/20' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
             >
               <ClipboardList size={16} />
@@ -727,7 +804,7 @@ export default function Modal({ project, onClose }) {
               {hasSpecs && <span className="w-2 h-2 rounded-full bg-cesar-navy" />}
             </button>
 
-            {project.status === 'pending' && hasPermission('canUploadProofs') && (
+            {project.status === 'pending' && isClient() && (
               <>
                 <button onClick={handleApprove} disabled={isLoading}
                   className="flex items-center gap-2 px-6 py-2 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg transition-colors disabled:opacity-50">
@@ -754,7 +831,22 @@ export default function Modal({ project, onClose }) {
               </button>
             )}
 
-            {project.status === 'in_quality_control' && hasPermission('canUploadProofs') && (
+            {/* Ready for Pickup / Out for Delivery — admin/designer only, based on fulfillment */}
+            {project.status === 'in_quality_control' && (isAdmin() || isDesigner()) && (
+              project.fulfillment === 'delivery' ? (
+                <button onClick={() => handleAdvanceStatus('out_for_delivery')} disabled={isLoading}
+                  className="flex items-center gap-2 px-6 py-2 bg-[#0A6B6B] hover:bg-[#085656] text-white rounded-lg transition-colors disabled:opacity-50">
+                  <Truck size={16} />{isLoading ? 'Updating...' : 'Out for Delivery'}
+                </button>
+              ) : (
+                <button onClick={() => handleAdvanceStatus('ready_for_pickup')} disabled={isLoading}
+                  className="flex items-center gap-2 px-6 py-2 bg-[#0A6B6B] hover:bg-[#085656] text-white rounded-lg transition-colors disabled:opacity-50">
+                  <Store size={16} />{isLoading ? 'Updating...' : 'Ready for Pickup'}
+                </button>
+              )
+            )}
+
+            {(project.status === 'ready_for_pickup' || project.status === 'out_for_delivery') && hasPermission('canUploadProofs') && (
               <button onClick={() => handleAdvanceStatus('completed')} disabled={isLoading}
                 className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors disabled:opacity-50">
                 <PackageCheck size={16} />{isLoading ? 'Updating...' : 'Mark Completed'}
@@ -781,7 +873,6 @@ export default function Modal({ project, onClose }) {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               onClick={stopPropagation}
             >
-              {/* Panel Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="w-5 h-5 text-cesar-navy" />
@@ -792,8 +883,53 @@ export default function Modal({ project, onClose }) {
                 </button>
               </div>
 
-              {/* Panel Content */}
               <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
+                {/* Fulfillment */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Fulfillment</label>
+                  {canEdit ? (
+                    <div className="flex gap-2">
+                      {['pickup', 'delivery'].map(option => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setFulfillment(prev => prev === option ? '' : option)}
+                          className={`flex-1 py-2 px-3 rounded-lg border text-xs font-medium transition-colors ${
+                            fulfillment === option
+                              ? 'bg-cesar-navy text-white border-cesar-navy'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
+                          }`}
+                        >
+                          {option === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-900">
+                      {fulfillment === 'pickup' ? '🏪 Ready for Pickup' : fulfillment === 'delivery' ? '🚚 Out for Delivery' : <span className="text-gray-400">—</span>}
+                    </p>
+                  )}
+                </div>
+
+                {/* Estimated Completion Date */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Estimated Completion Date</label>
+                  {canEdit ? (
+                    <input
+                      type="date"
+                      value={estimatedCompletionDate}
+                      onChange={e => setEstimatedCompletionDate(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy"
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-900">
+                      {formatShortDate(estimatedCompletionDate) || <span className="text-gray-400">—</span>}
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-gray-100" />
 
                 {/* Size */}
                 <div>
@@ -876,9 +1012,9 @@ export default function Modal({ project, onClose }) {
                   )}
                 </div>
 
-                {/* Due Date */}
+                {/* Due Date (client requested) */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Due Date</label>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Client Requested Due Date</label>
                   {canEdit ? (
                     <input
                       type="date"
@@ -888,10 +1024,7 @@ export default function Modal({ project, onClose }) {
                     />
                   ) : (
                     <p className="text-sm text-gray-900">
-                      {specs.dueDate
-                        ? new Date(specs.dueDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                        : <span className="text-gray-400">—</span>
-                      }
+                      {formatShortDate(specs.dueDate) || <span className="text-gray-400">—</span>}
                     </p>
                   )}
                 </div>
@@ -915,7 +1048,6 @@ export default function Modal({ project, onClose }) {
                 </div>
               </div>
 
-              {/* Panel Footer */}
               {canEdit && (
                 <div className="px-5 py-4 border-t border-gray-200 flex-shrink-0">
                   <button

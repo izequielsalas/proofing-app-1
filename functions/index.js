@@ -117,9 +117,17 @@ const getSimpleProductionStatusTemplate = (data) => {
       heading: 'Your Order is Now in Production',
       message: 'Great news! We\'ve started working on your order.'
     },
+    ready_for_pickup: {
+      heading: 'Your Order is Ready for Pickup!',
+      message: 'Your order has passed quality control and is ready for you to pick up.'
+    },
+    out_for_delivery: {
+      heading: 'Your Order is Out for Delivery!',
+      message: 'Your order has passed quality control and is on its way to you.'
+    },
     completed: {
-      heading: 'Your Order is Ready!',
-      message: 'Your order has been completed and is ready for pickup or delivery.'
+      heading: 'Your Order is Complete!',
+      message: 'Your order has been completed. Thank you for choosing Cesar Graphics!'
     },
   };
 
@@ -498,7 +506,7 @@ exports.handleNewProof = onDocumentCreated(
 // Handle proof status changes
 // Email rules:
 //   Admin:  approved + completed only
-//   Client: in_production (designer/admin only) + completed
+//   Client: in_production (designer/admin only) + ready_for_pickup + out_for_delivery + completed
 exports.handleProofStatusChange = onDocumentUpdated(
   { document: 'proofs/{proofId}', secrets: [resendApiKey] },
   async (event) => {
@@ -537,12 +545,19 @@ exports.handleProofStatusChange = onDocumentUpdated(
         if (status === 'in_production') {
           return updatedByRole === 'designer' || updatedByRole === 'admin';
         }
+        if (status === 'ready_for_pickup') return true;
+        if (status === 'out_for_delivery') return true;
         if (status === 'completed') return true;
         return false;
       })();
 
       if (shouldNotifyClient && afterData.clientEmail) {
-        const statusLabel = { in_production: 'In Production', completed: 'Completed' };
+        const statusLabel = {
+          in_production: 'In Production',
+          ready_for_pickup: 'Ready for Pickup',
+          out_for_delivery: 'Out for Delivery',
+          completed: 'Completed'
+        };
         await resend.emails.send({
           from: FROM_EMAIL,
           to: afterData.clientEmail,
