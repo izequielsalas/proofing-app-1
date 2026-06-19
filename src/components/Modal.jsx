@@ -551,7 +551,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                 </span>
               )}
             </div>
-            <button className="p-2 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0" onClick={onClose}>
+            <button className="p-2 hover:bg-gray-100 rounded-full flex-shrink-0" onClick={onClose}>
               <X size={24} className="text-gray-500" />
             </button>
           </div>
@@ -572,7 +572,7 @@ export default function Modal({ project, onClose, onNavigate }) {
               <div className="mb-6">
                 <button
                   onClick={() => setShowHistory(!showHistory)}
-                  className="flex items-center gap-2 text-sm font-medium text-cesar-navy hover:text-[#003d73] transition-colors"
+                  className="flex items-center gap-2 text-sm font-medium text-cesar-navy hover:text-[#003d73]"
                 >
                   <GitBranch className="w-4 h-4" />
                   {showHistory ? 'Hide' : 'Show'} Revision History
@@ -643,7 +643,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                     {canViewClientHistory ? (
                       <button
                         onClick={handleOpenClientHistory}
-                        className="block text-cesar-navy hover:text-[#003d73] hover:underline font-medium transition-colors"
+                        className="btn-text p-1 min-h-0 block text-cesar-navy hover:text-[#003d73] hover:underline font-medium"
                         title="View order history for this client"
                       >
                         {project.clientName}
@@ -671,7 +671,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-gray-600">Invoice #:</span>
                     {canEdit && !editingInvoice && (
-                      <button onClick={() => setEditingInvoice(true)} className="text-gray-400 hover:text-cesar-navy transition-colors" title="Edit invoice number">
+                      <button onClick={() => setEditingInvoice(true)} className="btn-text p-1 min-h-0 text-gray-400 hover:text-[#002855]" title="Edit invoice number">
                         <Edit2 size={12} />
                       </button>
                     )}
@@ -706,7 +706,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                   {canEdit && availableTags.length > 0 && (
                     <button
                       onClick={() => setEditingTags(!editingTags)}
-                      className={`ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-full transition-colors ${
+                      className={`btn-text ml-auto flex items-center gap-1 text-xs px-2 py-0.5 min-h-0 rounded-full ${
                         editingTags ? 'bg-cesar-navy text-white' : 'text-gray-400 hover:text-cesar-navy hover:bg-gray-100'
                       }`}
                     >
@@ -725,7 +725,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                           type="button"
                           onClick={() => handleToggleTag(tag)}
                           disabled={savingTag}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-50 ${
+                          className={`px-3 py-1 rounded-full text-xs font-medium border disabled:opacity-50 ${
                             isSelected ? 'bg-cesar-navy text-white border-cesar-navy' : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
                           }`}
                         >
@@ -829,7 +829,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                 <button
                   onClick={handleAddNote}
                   disabled={!newNote.trim() || savingNote}
-                  className="p-2 bg-cesar-navy hover:bg-[#003070] text-white rounded-lg transition-colors disabled:opacity-40 mt-1"
+                  className="p-2 bg-cesar-navy hover:bg-[#003070] text-white rounded-lg disabled:opacity-40 mt-1"
                 >
                   {savingNote ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Send size={16} />}
                 </button>
@@ -850,7 +850,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                   </div>
                   <button
                     onClick={() => setShowUploadRevision(!showUploadRevision)}
-                    className="flex items-center gap-2 px-4 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg text-sm font-medium"
                   >
                     <Upload className="w-4 h-4" />
                     {showUploadRevision ? 'Cancel Upload' : 'Upload Revision'}
@@ -875,8 +875,8 @@ export default function Modal({ project, onClose, onNavigate }) {
             {/* Details button — all roles */}
             <button
               onClick={() => { setShowHistoryPanel(false); setShowSpecsPanel(true); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
-                hasSpecs ? 'bg-cesar-navy/10 text-cesar-navy hover:bg-cesar-navy/20' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              className={`btn-custom flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${
+                hasSpecs ? 'bg-[#0028551a] text-cesar-navy hover:bg-[#00285533]' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
             >
               <ClipboardList size={16} />
@@ -887,11 +887,11 @@ export default function Modal({ project, onClose, onNavigate }) {
             {project.status === 'pending' && isClient() && (
               <>
                 <button onClick={handleApprove} disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg transition-colors disabled:opacity-50">
+                  className="flex items-center gap-2 px-6 py-2 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg disabled:opacity-50">
                   <Check size={16} />{isLoading ? 'Approving...' : 'Approve'}
                 </button>
                 <button onClick={handleDecline} disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-cesar-magenta hover:bg-[#c9006a] text-white rounded-lg transition-colors disabled:opacity-50">
+                  className="flex items-center gap-2 px-6 py-2 bg-cesar-magenta hover:bg-[#c9006a] text-white rounded-lg disabled:opacity-50">
                   <AlertCircle size={16} />{isLoading ? 'Processing...' : (showCommentBox ? 'Submit Decline' : 'Decline')}
                 </button>
               </>
@@ -899,14 +899,14 @@ export default function Modal({ project, onClose, onNavigate }) {
 
             {project.status === 'approved' && hasPermission('canUploadProofs') && (
               <button onClick={() => handleAdvanceStatus('in_production')} disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg transition-colors disabled:opacity-50">
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg disabled:opacity-50">
                 <Factory size={16} />{isLoading ? 'Updating...' : 'Send to Production'}
               </button>
             )}
 
             {project.status === 'in_production' && (isAdmin() || isDesigner() || isProduction()) && (
               <button onClick={() => handleAdvanceStatus('in_quality_control')} disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 bg-cesar-purple hover:bg-[#6a45a8] text-white rounded-lg transition-colors disabled:opacity-50">
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-purple hover:bg-[#6a45a8] text-white rounded-lg disabled:opacity-50">
                 <FlaskConical size={16} />{isLoading ? 'Updating...' : 'Move to QC'}
               </button>
             )}
@@ -914,12 +914,12 @@ export default function Modal({ project, onClose, onNavigate }) {
             {project.status === 'in_quality_control' && (isAdmin() || isDesigner()) && (
               project.fulfillment === 'delivery' ? (
                 <button onClick={() => handleAdvanceStatus('out_for_delivery')} disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-[#0A6B6B] hover:bg-[#085656] text-white rounded-lg transition-colors disabled:opacity-50">
+                  className="flex items-center gap-2 px-6 py-2 bg-[#0A6B6B] hover:bg-[#085656] text-white rounded-lg disabled:opacity-50">
                   <Truck size={16} />{isLoading ? 'Updating...' : 'Out for Delivery'}
                 </button>
               ) : (
                 <button onClick={() => handleAdvanceStatus('ready_for_pickup')} disabled={isLoading}
-                  className="flex items-center gap-2 px-6 py-2 bg-[#0A6B6B] hover:bg-[#085656] text-white rounded-lg transition-colors disabled:opacity-50">
+                  className="flex items-center gap-2 px-6 py-2 bg-[#0A6B6B] hover:bg-[#085656] text-white rounded-lg disabled:opacity-50">
                   <Store size={16} />{isLoading ? 'Updating...' : 'Ready for Pickup'}
                 </button>
               )
@@ -927,14 +927,14 @@ export default function Modal({ project, onClose, onNavigate }) {
 
             {(project.status === 'ready_for_pickup' || project.status === 'out_for_delivery') && hasPermission('canUploadProofs') && (
               <button onClick={() => handleAdvanceStatus('completed')} disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg transition-colors disabled:opacity-50">
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg disabled:opacity-50">
                 <PackageCheck size={16} />{isLoading ? 'Updating...' : 'Mark Completed'}
               </button>
             )}
 
             {project.status === 'in_quality_control' && (isAdmin() || isDesigner()) && (
               <button onClick={() => handleAdvanceStatus('in_production')} disabled={isLoading}
-                className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg transition-colors disabled:opacity-50">
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg disabled:opacity-50">
                 <Factory size={16} />{isLoading ? 'Updating...' : 'Return to Production'}
               </button>
             )}
@@ -957,7 +957,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                   <ClipboardList className="w-5 h-5 text-cesar-navy" />
                   <h3 className="font-semibold text-gray-900">Print Details</h3>
                 </div>
-                <button onClick={() => setShowSpecsPanel(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <button onClick={() => setShowSpecsPanel(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
                   <X size={18} className="text-gray-500" />
                 </button>
               </div>
@@ -974,7 +974,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                           key={option}
                           type="button"
                           onClick={() => setFulfillment(prev => prev === option ? '' : option)}
-                          className={`flex-1 py-2 px-3 rounded-lg border text-xs font-medium transition-colors ${
+                          className={`flex-1 py-2 px-3 rounded-lg border text-xs font-medium ${
                             fulfillment === option
                               ? 'bg-cesar-navy text-white border-cesar-navy'
                               : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
@@ -1132,7 +1132,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                   <button
                     onClick={handleSaveSpecs}
                     disabled={savingSpecs}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-cesar-navy hover:bg-[#003070] text-white rounded-lg transition-colors disabled:opacity-50 text-sm font-medium"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-cesar-navy hover:bg-[#003070] text-white rounded-lg disabled:opacity-50 text-sm font-medium"
                   >
                     {savingSpecs ? (
                       <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />Saving...</>
@@ -1167,7 +1167,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                     <p className="text-xs text-gray-500">{project.clientName}</p>
                   </div>
                 </div>
-                <button onClick={() => setShowHistoryPanel(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                <button onClick={() => setShowHistoryPanel(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
                   <X size={18} className="text-gray-500" />
                 </button>
               </div>
@@ -1197,10 +1197,10 @@ export default function Modal({ project, onClose, onNavigate }) {
                         <button
                           key={order.id}
                           onClick={() => handleNavigateToOrder(order)}
-                          className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                          className={`btn-custom w-full text-left p-3 rounded-lg border ${
                             isCurrent
-                              ? 'bg-cesar-navy/5 border-cesar-navy/30'
-                              : 'bg-white border-gray-200 hover:border-cesar-navy/30 hover:bg-gray-50'
+                              ? 'bg-[#0028550d] border-[#0028554d]'
+                              : 'bg-white border-gray-200 hover:border-[#0028554d] hover:bg-gray-50'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1">
@@ -1208,7 +1208,7 @@ export default function Modal({ project, onClose, onNavigate }) {
                               {order.title || `Proof #${order.id.slice(-6)}`}
                             </span>
                             {isCurrent && (
-                              <span className="text-[10px] font-medium text-cesar-navy bg-cesar-navy/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                              <span className="text-[10px] font-medium text-cesar-navy bg-[#0028551a] px-1.5 py-0.5 rounded-full flex-shrink-0">
                                 Viewing
                               </span>
                             )}

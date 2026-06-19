@@ -471,7 +471,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
               type="button"
               onClick={() => setFulfillment(prev => prev === option ? '' : option)}
               disabled={uploading}
-              className={`flex-1 py-2.5 px-4 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 ${
+              className={`flex-1 py-2.5 px-4 rounded-lg border text-sm font-medium disabled:opacity-50 ${
                 fulfillment === option
                   ? 'bg-cesar-navy text-white border-cesar-navy'
                   : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
@@ -492,7 +492,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
             <button
               type="button"
               onClick={() => setShowInviteForm(!showInviteForm)}
-              className="text-sm text-cesar-navy hover:text-[#003d73] font-medium"
+              className="btn-text text-sm text-cesar-navy hover:text-[#003d73] font-medium"
               disabled={uploading}
             >
               + Invite New Client
@@ -595,7 +595,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                   type="button"
                   onClick={() => toggleTag(tag)}
                   disabled={uploading}
-                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-50 ${
+                  className={`px-3 py-1 rounded-full text-xs font-medium border disabled:opacity-50 ${
                     isSelected ? 'bg-cesar-navy text-white border-cesar-navy' : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
                   }`}
                 >
@@ -633,7 +633,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         <p className="text-sm text-gray-600 mb-4">
           {revisionMode ? 'Upload one PDF file (replaces previous version)' : 'Supports PDF files up to 24MB'}
         </p>
-        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-6 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors disabled:opacity-50">
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="px-6 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg disabled:opacity-50">
           Select {revisionMode ? 'File' : 'Files'}
         </button>
       </div>
@@ -664,7 +664,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                     {progress?.status === 'complete' && <CheckCircle className="h-5 w-5 text-cesar-green" />}
                     {progress?.status === 'error' && <AlertCircle className="h-5 w-5 text-cesar-magenta" />}
                     {!progress && !uploading && (
-                      <button onClick={() => removeFile(index)} className="p-1 hover:bg-gray-200 rounded transition-colors">
+                      <button onClick={() => removeFile(index)} className="p-1 hover:bg-gray-200 rounded">
                         <X className="h-4 w-4 text-gray-500" />
                       </button>
                     )}
@@ -688,7 +688,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           <button
             onClick={uploadFiles}
             disabled={uploading || !projectTitle.trim() || (!revisionMode && canAssignProofs() && !selectedClientId)}
-            className="px-6 py-3 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-cesar-green hover:bg-[#66c23a] text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {uploading ? 'Uploading...' : revisionMode ? 'Upload Revision' : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`}
           </button>

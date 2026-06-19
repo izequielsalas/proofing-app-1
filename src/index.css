@@ -23,157 +23,89 @@
   --cesar-orange: #FF6800;
 }
 
-/* ============================================
-   Cesar Brand Color Utilities
-   Use these in JSX: bg-cesar-navy, text-cesar-green, etc.
-   ============================================ */
+/*
+ * Both sections below are wrapped in @layer utilities rather than left
+ * plain/un-layered. Reason: a plain class like ".bg-cesar-navy
+ * { background-color: #002855 }" has no :hover condition, so it applies
+ * ALL the time — hover included. Being un-layered, it would beat
+ * Tailwind's hover:bg-[#003d73] rule even DURING hover (un-layered
+ * always wins over layered, full stop, regardless of which rule is
+ * actually relevant to the current state). That silently defeated the
+ * hover color on every button using this bg-cesar-* + hover:bg-[hex]
+ * pairing — Upload Proof, Mark Completed, Save Details, Send
+ * Invitation, and others. Inside @layer utilities, these classes sit in
+ * the SAME layer as Tailwind's own generated hover utilities, so normal
+ * specificity applies within that layer — a :hover-qualified selector
+ * correctly outranks a plain one, and the hover color shows up.
+ */
+@layer utilities {
+  /* ============================================
+     Cesar Brand Color Utilities
+     Use these in JSX: bg-cesar-navy, text-cesar-green, etc.
+     ============================================ */
 
-/* Navy — #002855 */
-.bg-cesar-navy { background-color: #002855; }
-.text-cesar-navy { color: #002855; }
-.border-cesar-navy { border-color: #002855; }
-.ring-cesar-navy { --tw-ring-color: #002855; }
+  /* Navy — #002855 */
+  .bg-cesar-navy { background-color: #002855; }
+  .text-cesar-navy { color: #002855; }
+  .border-cesar-navy { border-color: #002855; }
+  .ring-cesar-navy { --tw-ring-color: #002855; }
 
-/* Green — #78D64B */
-.bg-cesar-green { background-color: #78D64B; }
-.text-cesar-green { color: #78D64B; }
-.border-cesar-green { border-color: #78D64B; }
-.ring-cesar-green { --tw-ring-color: #78D64B; }
+  /* Green — #78D64B */
+  .bg-cesar-green { background-color: #78D64B; }
+  .text-cesar-green { color: #78D64B; }
+  .border-cesar-green { border-color: #78D64B; }
+  .ring-cesar-green { --tw-ring-color: #78D64B; }
 
-/* Magenta — #E4007C */
-.bg-cesar-magenta { background-color: #E4007C; }
-.text-cesar-magenta { color: #E4007C; }
-.border-cesar-magenta { border-color: #E4007C; }
-.ring-cesar-magenta { --tw-ring-color: #E4007C; }
+  /* Magenta — #E4007C */
+  .bg-cesar-magenta { background-color: #E4007C; }
+  .text-cesar-magenta { color: #E4007C; }
+  .border-cesar-magenta { border-color: #E4007C; }
+  .ring-cesar-magenta { --tw-ring-color: #E4007C; }
 
-/* Yellow — #FDB813 */
-.bg-cesar-yellow { background-color: #FDB813; }
-.text-cesar-yellow { color: #FDB813; }
-.border-cesar-yellow { border-color: #FDB813; }
-.ring-cesar-yellow { --tw-ring-color: #FDB813; }
+  /* Yellow — #FDB813 */
+  .bg-cesar-yellow { background-color: #FDB813; }
+  .text-cesar-yellow { color: #FDB813; }
+  .border-cesar-yellow { border-color: #FDB813; }
+  .ring-cesar-yellow { --tw-ring-color: #FDB813; }
 
-/* Purple — #7E57C2 */
-.bg-cesar-purple { background-color: #7E57C2; }
-.text-cesar-purple { color: #7E57C2; }
-.border-cesar-purple { border-color: #7E57C2; }
-.ring-cesar-purple { --tw-ring-color: #7E57C2; }
+  /* Purple — #7E57C2 */
+  .bg-cesar-purple { background-color: #7E57C2; }
+  .text-cesar-purple { color: #7E57C2; }
+  .border-cesar-purple { border-color: #7E57C2; }
+  .ring-cesar-purple { --tw-ring-color: #7E57C2; }
 
-/* Orange — #FF6800 */
-.bg-cesar-orange { background-color: #FF6800; }
-.text-cesar-orange { color: #FF6800; }
-.border-cesar-orange { border-color: #FF6800; }
-.ring-cesar-orange { --tw-ring-color: #FF6800; }
+  /* Orange — #FF6800 */
+  .bg-cesar-orange { background-color: #FF6800; }
+  .text-cesar-orange { color: #FF6800; }
+  .border-cesar-orange { border-color: #FF6800; }
+  .ring-cesar-orange { --tw-ring-color: #FF6800; }
 
-/* Cyan — #00FFFF */
-.bg-cesar-cyan { background-color: #00FFFF; }
-.text-cesar-cyan { color: #00FFFF; }
-.border-cesar-cyan { border-color: #00FFFF; }
+  /* Cyan — #00FFFF */
+  .bg-cesar-cyan { background-color: #00FFFF; }
+  .text-cesar-cyan { color: #00FFFF; }
+  .border-cesar-cyan { border-color: #00FFFF; }
 
-/* Gray — #BBBBBB */
-.bg-cesar-gray { background-color: #BBBBBB; }
-.text-cesar-gray { color: #BBBBBB; }
-.border-cesar-gray { border-color: #BBBBBB; }
+  /* Gray — #BBBBBB */
+  .bg-cesar-gray { background-color: #BBBBBB; }
+  .text-cesar-gray { color: #BBBBBB; }
+  .border-cesar-gray { border-color: #BBBBBB; }
 
-/* ============================================
-   Legacy alias utilities (from original file)
-   ============================================ */
-.bg-navy { background-color: var(--cesar-primary); }
-.text-navy { color: var(--cesar-primary); }
-.border-navy { border-color: var(--cesar-primary); }
-.hover\:bg-navy:hover { background-color: var(--cesar-primary); }
-.hover\:text-navy:hover { color: var(--cesar-primary); }
+  /* ============================================
+     Legacy alias utilities (from original file)
+     ============================================ */
+  .bg-navy { background-color: var(--cesar-primary); }
+  .text-navy { color: var(--cesar-primary); }
+  .border-navy { border-color: var(--cesar-primary); }
+  .hover\:bg-navy:hover { background-color: var(--cesar-primary); }
+  .hover\:text-navy:hover { color: var(--cesar-primary); }
 
-.bg-charcoal { background-color: var(--cesar-dark); }
-.text-charcoal { color: var(--cesar-dark); }
+  .bg-charcoal { background-color: var(--cesar-dark); }
+  .text-charcoal { color: var(--cesar-dark); }
 
-.bg-grey { background-color: var(--cesar-light); }
-.text-grey { color: #6b7280; }
-
-/* ============================================
-   Enhanced button styles
-   ============================================ */
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  position: relative;
-  overflow: hidden;
+  .bg-grey { background-color: var(--cesar-light); }
+  .text-grey { color: #6b7280; }
 }
 
-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-button:active {
-  transform: translateY(0);
-}
-
-button:focus,
-button:focus-visible {
-  outline: 2px solid var(--cesar-secondary);
-  outline-offset: 2px;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-/* Primary button styling */
-.btn-primary {
-  background-color: var(--cesar-primary);
-  color: var(--cesar-white);
-  border-color: var(--cesar-primary);
-}
-
-.btn-primary:hover {
-  background-color: var(--cesar-secondary);
-  border-color: var(--cesar-secondary);
-}
-
-/* Secondary button styling */
-.btn-secondary {
-  background-color: transparent;
-  color: var(--cesar-primary);
-  border-color: var(--cesar-primary);
-}
-
-.btn-secondary:hover {
-  background-color: var(--cesar-primary);
-  color: var(--cesar-white);
-}
-
-/* Success button styling */
-.btn-success {
-  background-color: var(--cesar-success);
-  color: var(--cesar-white);
-  border-color: var(--cesar-success);
-}
-
-.btn-success:hover {
-  background-color: #66c23a;
-  border-color: #66c23a;
-}
-
-/* Danger button styling */
-.btn-danger {
-  background-color: var(--cesar-danger);
-  color: var(--cesar-white);
-  border-color: var(--cesar-danger);
-}
-
-.btn-danger:hover {
-  background-color: #c9006a;
-  border-color: #c9006a;
-}
 
 /* Input styling */
 .input {
@@ -279,7 +211,7 @@ button:disabled {
   .no-print {
     display: none !important;
   }
-  
+
   .print-full-width {
     width: 100% !important;
     max-width: none !important;
@@ -291,7 +223,7 @@ button:disabled {
   .responsive-text {
     font-size: 0.875rem;
   }
-  
+
   button {
     padding: 0.5em 1em;
     font-size: 0.9em;
@@ -346,58 +278,98 @@ button:disabled {
    UNIFIED BUTTON SYSTEM
    ============================================ */
 
-/* Base button reset - applies to ALL buttons */
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.75em 1.5em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  position: relative;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  min-height: 44px; /* Touch-friendly */
+/*
+ * Everything inside @layer base below is an IMPLICIT default — it
+ * applies automatically to any <button> that hasn't opted into
+ * something else. Tailwind v4 puts every class it generates (bg-*,
+ * text-*, px-*, py-*, min-h-*, including arbitrary values like
+ * bg-[#003d73]) inside its own cascade layer. CSS layers always beat
+ * specificity: ANY plain, un-layered rule beats ANY layered rule, no
+ * matter how specific the layered one looks on paper. Left un-layered,
+ * these implicit defaults would keep silently overriding real Tailwind
+ * padding/min-height/color/background classes wherever a developer
+ * wrote one — which is exactly what was breaking the Details button,
+ * the order-history rows, and the oversized edit-icon buttons.
+ * Wrapping them in @layer base means Tailwind's own utilities (always
+ * in @layer utilities, declared after base) correctly win whenever a
+ * button actually specifies one. Our hand-written, un-layered
+ * .bg-cesar-*/.text-cesar-* classes and the explicit .btn-primary etc.
+ * variants below stay un-layered on purpose, so they continue to act
+ * as deliberate, forceful overrides exactly as before.
+ */
+@layer base {
+  /* Base button reset - applies to ALL buttons */
+  button {
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 0.75em 1.5em;
+    font-size: 1em;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    min-height: 44px; /* Touch-friendly default; overridable with min-h-* */
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  button:active {
+    transform: translateY(0);
+  }
+
+  button:focus,
+  button:focus-visible {
+    outline: 2px solid var(--cesar-secondary);
+    outline-offset: 2px;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /*
+   * Implicit navy default for genuinely bare buttons only (no btn-*
+   * class, no .unstyled). The :not(:where(...)) wrapper keeps this
+   * from re-applying to any button that already opted into a look.
+   */
+  button:not(:where([class*="btn-"], .unstyled)) {
+    background-color: var(--cesar-primary);
+    color: var(--cesar-white);
+    border-color: var(--cesar-primary);
+  }
+
+  button:not(:where([class*="btn-"], .unstyled)):hover {
+    background-color: var(--cesar-secondary);
+    border-color: var(--cesar-secondary);
+    color: var(--cesar-white);
+  }
 }
 
-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-button:active {
-  transform: translateY(0);
-}
-
-button:focus,
-button:focus-visible {
-  outline: 2px solid var(--cesar-secondary);
-  outline-offset: 2px;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-/* PRIMARY BUTTONS - Main actions */
-.btn-primary,
-button:not([class*="btn-"]):not(.unstyled) {
+/*
+ * PRIMARY BUTTONS - explicit opt-in. Deliberately left un-layered (not
+ * inside @layer base above) so it keeps winning even if a stray
+ * Tailwind utility class ends up on the same button.
+ */
+.btn-primary {
   background-color: var(--cesar-primary);
   color: var(--cesar-white);
   border-color: var(--cesar-primary);
 }
 
-.btn-primary:hover,
-button:not([class*="btn-"]):not(.unstyled):hover {
+.btn-primary:hover {
   background-color: var(--cesar-secondary);
   border-color: var(--cesar-secondary);
   color: var(--cesar-white);
@@ -449,6 +421,28 @@ button:not([class*="btn-"]):not(.unstyled):hover {
 .btn-ghost:hover {
   background-color: #f3f4f6;
   color: var(--cesar-primary);
+}
+
+/*
+ * TEXT/LINK BUTTONS - intentionally empty.
+ * This class has no rules of its own. Its only job is to satisfy the
+ * [class*="btn-"] check in the primary-button catch-all above, so a
+ * <button> styled to look like a plain text link (e.g. "+ Invite New
+ * Client", a client-name link) is excluded from the navy
+ * background/color default and styled entirely by its own Tailwind
+ * classes — color, hover color, underline, etc.
+ */
+.btn-text {
+}
+
+/*
+ * SELF-STYLED BUTTONS - also intentionally empty, same mechanism as
+ * .btn-text above. Use this one instead when the button DOES want its
+ * own background (a tinted pill, a card-style row, etc.) fully driven
+ * by its own Tailwind/arbitrary-value classes, rather than no
+ * background at all.
+ */
+.btn-custom {
 }
 
 /* UNSTYLED - For custom styled buttons (targeted reset, not all: unset) */

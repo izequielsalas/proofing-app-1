@@ -242,7 +242,7 @@ export default function Dashboard() {
                 </div>
                 <div className="text-xs text-gray-500 capitalize">{userProfile.role}</div>
               </div>
-              <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+              <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md">
                 <LogOut size={16} />
                 Logout
               </button>
@@ -255,25 +255,14 @@ export default function Dashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
-          <div
-            onClick={() => setFilter('all')}
-            className={`rounded-lg shadow px-4 py-5 text-left w-full transition-all duration-200 border-2 cursor-pointer select-none ${
-              filter === 'all' ? 'border-cesar-navy shadow-md bg-gray-50' : 'bg-white border-transparent hover:shadow-md hover:border-gray-200'
-            }`}
-          >
-            <div className="flex items-center">
-              <div className="p-2 bg-[#E0EAF5] rounded-lg">
-                <div className="w-4 h-4 bg-cesar-navy rounded"></div>
-              </div>
-              <div className="ml-4">
-                <p className="text-xs font-medium text-gray-600 whitespace-nowrap">
-                  {isAdmin() ? 'Total Jobs' : 'Your Jobs'}
-                </p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
-              </div>
-            </div>
-          </div>
-
+          <StatCard
+            label={isAdmin() ? 'Total Jobs' : 'Your Jobs'}
+            value={stats.total}
+            filterKey="all"
+            iconColor="bg-cesar-navy"
+            bgColor="bg-[#E0EAF5]"
+            borderColor="border-cesar-navy"
+          />
           <StatCard label="Pending"       value={stats.pending}            filterKey="pending"            iconColor="bg-cesar-yellow"   bgColor="bg-[#FEF3CD]"   borderColor="border-cesar-yellow" />
           <StatCard label="Approved"      value={stats.approved}           filterKey="approved"           iconColor="bg-cesar-green"    bgColor="bg-[#E6F9DD]"   borderColor="border-cesar-green" />
           <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-cesar-magenta"  bgColor="bg-[#FCE4EC]"   borderColor="border-cesar-magenta" />
@@ -351,7 +340,7 @@ export default function Dashboard() {
             {hasPermission('canUploadProofs') && !showUpload && (
               <button
                 onClick={() => setShowUpload(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-neutral-600 hover:bg-neutral-700 text-white rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-cesar-navy hover:bg-[#003d73] text-white rounded-lg"
               >
                 <Upload size={16} />
                 Upload Proof

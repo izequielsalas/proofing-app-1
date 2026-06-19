@@ -16,6 +16,7 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
 
   const getStatusColor = () => {
     switch (status) {
+      case 'pending': return 'bg-[#FEF3CD] text-[#92690B]';
       case 'approved': return 'bg-[#E6F9DD] text-[#2D7A0F]';
       case 'declined': return 'bg-[#FCE4EC] text-[#A8005A]';
       case 'in_production': return 'bg-[#FFF0E0] text-[#B34D00]';
@@ -23,7 +24,7 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
       case 'ready_for_pickup': return 'bg-[#DFF7F5] text-[#0A6B6B]';
       case 'out_for_delivery': return 'bg-[#DFF7F5] text-[#0A6B6B]';
       case 'completed': return 'bg-[#E0EAF5] text-[#002855]';
-      default: return 'bg-[#D6F0FF] text-[#006699]';
+      default: return 'bg-[#D6F0FF] text-[#006699]'; // genuinely unknown/unrecognized status only
     }
   };
 
@@ -136,7 +137,7 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
 
       {/* Content */}
       <div className="p-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+        <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2 min-h-[3.5rem]">
           {title}
         </h3>
 
