@@ -260,7 +260,7 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3 mb-8">
           <StatCard
             label={isAdmin() || isDesigner() ? 'Total Jobs' : 'Your Jobs'}
             value={stats.total}
@@ -272,8 +272,8 @@ export default function Dashboard() {
           <StatCard label="Pending"       value={stats.pending}            filterKey="pending"            iconColor="bg-cesar-yellow"   bgColor="bg-[#FEF3CD]"   borderColor="border-cesar-yellow" />
           <StatCard label="Approved"      value={stats.approved}           filterKey="approved"           iconColor="bg-cesar-green"    bgColor="bg-[#E6F9DD]"   borderColor="border-cesar-green" />
           <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-cesar-magenta"  bgColor="bg-[#FCE4EC]"   borderColor="border-cesar-magenta" />
-          <StatCard label="Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
-          <StatCard label="QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
+          <StatCard label="Production"    value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
+          <StatCard label="QC"            value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
           <StatCard
             label="Fulfillment"
             value={(stats.ready_for_pickup || 0) + (stats.out_for_delivery || 0)}
