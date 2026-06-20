@@ -772,7 +772,8 @@ exports.generatePdfThumbnail = onObjectFinalized(
       });
 
       await bucket.file(thumbnailPath).makePublic();
-      const thumbnailUrl = `https://storage.googleapis.com/${bucket.name}/${thumbnailPath}`;
+      const encodedThumbnailPath = thumbnailPath.split("/").map(encodeURIComponent).join("/");
+      const thumbnailUrl = `https://storage.googleapis.com/${bucket.name}/${encodedThumbnailPath}`;
 
       const storageFileName = filePath.split("/").pop();
       const proofsQuery = await db.collection("proofs")

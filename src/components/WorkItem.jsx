@@ -1,7 +1,11 @@
 import { FileText, User, Calendar, Clock, Factory, FlaskConical, PackageCheck, Tag, AlertCircle, Store, Truck } from "lucide-react";
 
-export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail, tags, qcAcknowledged }) {
+export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pending', clientName, createdAt, revisionNumber, parentProofId, uploaderEmail, tags, qcAcknowledged, fileName, originalFileName }) {
   const isPDF = fileUrl?.toLowerCase().includes('.pdf');
+
+  // Prefer the original human-readable name; fall back to stripping the
+  // timestamp prefix off fileName for proofs uploaded before this field existed
+  const displayFileName = originalFileName || fileName?.replace(/^\d+_/, '');
 
   // Show QC badge when order is in QC and admin hasn't acknowledged yet
   const showQCBadge = status === 'in_quality_control' && qcAcknowledged === false;
@@ -165,6 +169,13 @@ export default function WorkItem({ title, fileUrl, thumbnailUrl, status = 'pendi
             <FileText className="w-4 h-4 flex-shrink-0" />
             <span>{isPDF ? 'PDF Document' : 'Image File'}</span>
           </div>
+
+          {displayFileName && (
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 flex-shrink-0 text-gray-400" />
+              <span className="truncate text-gray-500" title={displayFileName}>{displayFileName}</span>
+            </div>
+          )}
 
           {/* Tags */}
           {tags?.length > 0 && (

@@ -52,12 +52,11 @@ export default function Dashboard() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [clientFilter, setClientFilter] = useState('all');
+  const [uploaderFilter, setUploaderFilter] = useState('all'); // 'all' | 'mine'
   const [showUpload, setShowUpload] = useState(false);
   const [stats, setStats] = useState({ pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 });
 
   const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
-  const [uploadedProofs, setUploadedProofs] = useState([]);
-  const [assignedProofs, setAssignedProofs] = useState([]);
 
   // ─── Firestore listeners ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -82,39 +81,15 @@ export default function Dashboard() {
       return unsub;
 
     } else if (isDesigner()) {
-      if (!userProfile.uid) {
-        console.warn('Designer profile is missing uid — cannot load proofs');
-        return;
-      }
-      const unsubscribers = [];
-      const uploadedQuery = query(collection(db, 'proofs'), where('uploadedBy', '==', userProfile.uid));
-      const unsubUploaded = onSnapshot(uploadedQuery, (snapshot) => {
-        setUploadedProofs(snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+      // Designers now see every proof, same query as admin
+      const q = query(collection(db, 'proofs'), orderBy('createdAt', 'desc'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+        setProofs(data);
       });
-      unsubscribers.push(unsubUploaded);
-      const assignedQuery = query(collection(db, 'proofs'), where('assignedTo', 'array-contains', userProfile.uid));
-      const unsubAssigned = onSnapshot(assignedQuery, (snapshot) => {
-        setAssignedProofs(snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
-      });
-      unsubscribers.push(unsubAssigned);
-      return () => unsubscribers.forEach((unsub) => unsub());
+      return unsub;
     }
   }, [currentUser, userProfile, isAdmin, isClient, isDesigner]);
-
-  // ─── Combine designer proofs ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isDesigner()) return;
-    const combined = [...uploadedProofs];
-    assignedProofs.forEach((proof) => {
-      if (!combined.find((p) => p.id === proof.id)) combined.push(proof);
-    });
-    combined.sort((a, b) => {
-      const aTime = a.createdAt?.toDate?.() || new Date(0);
-      const bTime = b.createdAt?.toDate?.() || new Date(0);
-      return bTime - aTime;
-    });
-    setProofs(combined);
-  }, [uploadedProofs, assignedProofs, isDesigner]);
 
   // ─── Chain-aware derived state ───────────────────────────────────────────────
   const allChains = useMemo(() => buildChains(proofs), [proofs]);
@@ -136,6 +111,7 @@ export default function Dashboard() {
         const latest = group[0];
         const matchesFilter = filter === 'all' || latest.status === filter;
         const matchesClient = clientFilter === 'all' || latest.clientName === clientFilter;
+        const matchesUploader = uploaderFilter === 'all' || latest.uploadedBy === userProfile?.uid;
         const matchesSearch =
           searchTerm === '' ||
           group.some((proof) => {
@@ -147,14 +123,14 @@ export default function Dashboard() {
                 proof.invoiceNumber?.toLowerCase().includes(term)
               );
           });
-        return matchesFilter && matchesSearch && matchesClient;
+        return matchesFilter && matchesSearch && matchesClient && matchesUploader;
       })
       .sort((a, b) => {
         const aTime = a[0].createdAt?.toDate?.() || new Date(0);
         const bTime = b[0].createdAt?.toDate?.() || new Date(0);
         return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
       });
-  }, [allChains, filter, searchTerm, sortOrder, clientFilter]);
+  }, [allChains, filter, searchTerm, sortOrder, clientFilter, uploaderFilter, userProfile]);
 
   const filteredProofs = useMemo(
     () => filteredChains.flat(),
@@ -335,6 +311,19 @@ export default function Dashboard() {
                   </select>
                 </div>
               )}
+
+              {/* Uploaded by me filter — visible to everyone */}
+              <button
+                onClick={() => setUploaderFilter(prev => (prev === 'mine' ? 'all' : 'mine'))}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  uploaderFilter === 'mine'
+                    ? 'bg-cesar-navy text-white border-cesar-navy'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <Users size={16} />
+                Uploaded by me
+              </button>
             </div>
 
             {hasPermission('canUploadProofs') && !showUpload && (
@@ -366,7 +355,7 @@ export default function Dashboard() {
         {isDesigner() && (
           <div className="bg-[#EDE7F6] border border-cesar-purple/20 rounded-lg p-4 mb-6">
             <p className="text-[#5A3695] text-sm">
-              <strong>Designer View:</strong> You can see proofs assigned to you and upload new proofs for client approval.
+              <strong>Designer View:</strong> You can see all proofs and upload new proofs for client approval.
             </p>
           </div>
         )}
@@ -377,6 +366,7 @@ export default function Dashboard() {
             Showing {filteredChains.length} of {stats.total} {stats.total === 1 ? 'job' : 'jobs'}
             {filter !== 'all' && ` · filtered by ${filter.replace(/_/g, ' ')}`}
             {clientFilter !== 'all' && ` · client: ${clientFilter}`}
+            {uploaderFilter === 'mine' && ` · uploaded by me`}
             {searchTerm && ` · search: "${searchTerm}"`}
           </p>
         </div>

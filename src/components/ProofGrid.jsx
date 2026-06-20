@@ -114,6 +114,8 @@ function StackedCard({ group, onOpen }) {
           uploaderEmail={latest.uploaderEmail}
           tags={latest.tags}
           qcAcknowledged={latest.qcAcknowledged}
+          fileName={latest.fileName}
+          originalFileName={latest.originalFileName}
         />
       </div>
 

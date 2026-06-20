@@ -7,6 +7,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { sendInvitationEmail } from '../utils/emailService';
 import { Upload, File, X, CheckCircle, AlertCircle, ChevronDown, Tag } from 'lucide-react';
 
+// Strip URL/filesystem-risky characters from filenames before they go into Storage paths
+const sanitizeFileName = (name) => {
+  return name
+    .replace(/[#%&{}\\<>*?$!'":@+`|=]/g, '')  // strip URL/filesystem-risky chars
+    .replace(/\s+/g, '_');                     // spaces → underscores
+};
+
 export default function UploadProof({ onUploadComplete, revisionMode = false, parentProof = null }) {
   const [files, setFiles] = useState([]);
   const [projectTitle, setProjectTitle] = useState('');
@@ -290,7 +297,8 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         setUploadProgress(prev => ({ ...prev, [i]: { status: 'uploading', progress: 0 } }));
 
         const timestamp = Date.now();
-        const fileName = `${timestamp}_${file.name}`;
+        const sanitizedName = sanitizeFileName(file.name);
+        const fileName = `${timestamp}_${sanitizedName}`;
         const fileRef = ref(storage, `proofFiles/${fileName}`);
         await uploadBytes(fileRef, file);
         const downloadURL = await getDownloadURL(fileRef);
@@ -304,6 +312,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           clientStatus: parentProof.clientStatus || 'active',
           fileUrl: downloadURL,
           fileName: fileName,
+          originalFileName: file.name,
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
@@ -326,6 +335,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           clientStatus: selectedClient?.status || 'active',
           fileUrl: downloadURL,
           fileName: fileName,
+          originalFileName: file.name,
           fileType: file.type === 'application/pdf' ? 'pdf' : 'image',
           fileSize: file.size,
           status: 'pending',
