@@ -29,3 +29,16 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pglite-debug.log
+.runtimeconfig.json
+
+# Firebase service account keys
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+*.serviceaccount.json
