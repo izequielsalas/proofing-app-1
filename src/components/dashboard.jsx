@@ -41,7 +41,17 @@ const calcStats = (chains) =>
       acc[latest.status] = (acc[latest.status] || 0) + 1;
       return acc;
     },
-    { pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 }
+    {
+      pending: 0,
+      approved: 0,
+      declined: 0,
+      in_production: 0,
+      in_quality_control: 0,
+      ready_for_pickup: 0,
+      out_for_delivery: 0,
+      completed: 0,
+      total: 0,
+    }
   );
 
 const KNOWN_ROLES = ['admin', 'designer', 'client', 'production'];
@@ -54,7 +64,17 @@ export default function Dashboard() {
   const [clientFilter, setClientFilter] = useState('all');
   const [uploaderFilter, setUploaderFilter] = useState('all'); // 'all' | 'mine'
   const [showUpload, setShowUpload] = useState(false);
-  const [stats, setStats] = useState({ pending: 0, approved: 0, declined: 0, in_production: 0, in_quality_control: 0, completed: 0, total: 0 });
+  const [stats, setStats] = useState({
+    pending: 0,
+    approved: 0,
+    declined: 0,
+    in_production: 0,
+    in_quality_control: 0,
+    ready_for_pickup: 0,
+    out_for_delivery: 0,
+    completed: 0,
+    total: 0,
+  });
 
   const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
 
@@ -109,7 +129,11 @@ export default function Dashboard() {
     return allChains
       .filter((group) => {
         const latest = group[0];
-        const matchesFilter = filter === 'all' || latest.status === filter;
+        const matchesFilter =
+          filter === 'all' ||
+          (filter === 'fulfillment'
+            ? latest.status === 'ready_for_pickup' || latest.status === 'out_for_delivery'
+            : latest.status === filter);
         const matchesClient = clientFilter === 'all' || latest.clientName === clientFilter;
         const matchesUploader = uploaderFilter === 'all' || latest.uploadedBy === userProfile?.uid;
         const matchesSearch =
@@ -152,21 +176,22 @@ export default function Dashboard() {
     }
   };
 
+
   const StatCard = ({ label, value, filterKey, iconColor, bgColor, borderColor }) => {
     const isActive = filter === filterKey;
     return (
       <div
         onClick={() => setFilter(isActive ? 'all' : filterKey)}
-        className={`rounded-lg shadow px-4 py-5 text-left w-full transition-all duration-200 border-2 cursor-pointer select-none ${
+        className={`rounded-lg shadow px-3 py-4 text-left w-full transition-all duration-200 border-2 cursor-pointer select-none ${
           isActive ? `${borderColor} shadow-md bg-gray-50` : 'bg-white border-transparent hover:shadow-md hover:border-gray-200'
         }`}
       >
-        <div className="flex items-center">
-          <div className={`p-2 ${bgColor} rounded-lg`}>
+        <div className="flex items-center gap-3">
+          <div className={`p-2 ${bgColor} rounded-lg flex-shrink-0`}>
             <div className={`w-4 h-4 ${iconColor} rounded`}></div>
           </div>
-          <div className="ml-4">
-            <p className="text-xs font-medium text-gray-600 whitespace-nowrap">{label}</p>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-gray-600 leading-tight">{label}</p>
             <p className="text-2xl font-semibold text-gray-900">{value}</p>
           </div>
         </div>
@@ -230,9 +255,9 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-8">
           <StatCard
-            label={isAdmin() ? 'Total Jobs' : 'Your Jobs'}
+            label={isAdmin() || isDesigner() ? 'Total Jobs' : 'Your Jobs'}
             value={stats.total}
             filterKey="all"
             iconColor="bg-cesar-navy"
@@ -242,8 +267,16 @@ export default function Dashboard() {
           <StatCard label="Pending"       value={stats.pending}            filterKey="pending"            iconColor="bg-cesar-yellow"   bgColor="bg-[#FEF3CD]"   borderColor="border-cesar-yellow" />
           <StatCard label="Approved"      value={stats.approved}           filterKey="approved"           iconColor="bg-cesar-green"    bgColor="bg-[#E6F9DD]"   borderColor="border-cesar-green" />
           <StatCard label="Declined"      value={stats.declined}           filterKey="declined"           iconColor="bg-cesar-magenta"  bgColor="bg-[#FCE4EC]"   borderColor="border-cesar-magenta" />
-          <StatCard label="In Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
-          <StatCard label="In QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
+          <StatCard label="Production" value={stats.in_production}      filterKey="in_production"      iconColor="bg-cesar-orange"   bgColor="bg-[#FFF0E0]"   borderColor="border-cesar-orange" />
+          <StatCard label="QC"         value={stats.in_quality_control} filterKey="in_quality_control" iconColor="bg-cesar-purple"   bgColor="bg-[#EDE7F6]"   borderColor="border-cesar-purple" />
+          <StatCard
+            label="Fulfillment"
+            value={(stats.ready_for_pickup || 0) + (stats.out_for_delivery || 0)}
+            filterKey="fulfillment"
+            iconColor="bg-[#0A6B6B]"
+            bgColor="bg-[#DFF7F5]"
+            borderColor="border-[#0A6B6B]"
+          />
           <StatCard label="Completed"     value={stats.completed}          filterKey="completed"          iconColor="bg-[#0099CC]"      bgColor="bg-[#D6F0FF]"   borderColor="border-[#0099CC]" />
         </div>
 
@@ -276,8 +309,9 @@ export default function Dashboard() {
                   <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
                   <option value="declined">Declined</option>
-                  <option value="in_production">In Production</option>
-                  <option value="in_quality_control">In QC</option>
+                  <option value="in_production">Production</option>
+                  <option value="in_quality_control">QC</option>
+                  <option value="fulfillment">Fulfillment (Pickup/Delivery)</option>
                   <option value="completed">Completed</option>
                 </select>
               </div>
