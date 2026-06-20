@@ -78,6 +78,11 @@ export default function Dashboard() {
 
   const { currentUser, userProfile, isAdmin, isClient, isDesigner, hasPermission } = useAuth();
 
+  // Only admin/designer get the "Uploaded by me" filter — it has no
+  // meaningful use for clients (proofs are never uploaded by the client)
+  // or production (not handled by this dashboard's queries at all).
+  const canFilterByUploader = isAdmin() || isDesigner();
+
   // ─── Firestore listeners ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser || !userProfile) return;
@@ -135,7 +140,7 @@ export default function Dashboard() {
             ? latest.status === 'ready_for_pickup' || latest.status === 'out_for_delivery'
             : latest.status === filter);
         const matchesClient = clientFilter === 'all' || latest.clientName === clientFilter;
-        const matchesUploader = uploaderFilter === 'all' || latest.uploadedBy === userProfile?.uid;
+        const matchesUploader = !canFilterByUploader || uploaderFilter === 'all' || latest.uploadedBy === userProfile?.uid;
         const matchesSearch =
           searchTerm === '' ||
           group.some((proof) => {
@@ -154,7 +159,7 @@ export default function Dashboard() {
         const bTime = b[0].createdAt?.toDate?.() || new Date(0);
         return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
       });
-  }, [allChains, filter, searchTerm, sortOrder, clientFilter, uploaderFilter, userProfile]);
+  }, [allChains, filter, searchTerm, sortOrder, clientFilter, uploaderFilter, userProfile, canFilterByUploader]);
 
   const filteredProofs = useMemo(
     () => filteredChains.flat(),
@@ -346,18 +351,22 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Uploaded by me filter — visible to everyone */}
-              <button
-                onClick={() => setUploaderFilter(prev => (prev === 'mine' ? 'all' : 'mine'))}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                  uploaderFilter === 'mine'
-                    ? 'bg-cesar-navy text-white border-cesar-navy'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <Users size={16} />
-                Uploaded by me
-              </button>
+              {/* Uploaded by me filter — admin/designer only. Clients never
+                  upload their own proofs and production isn't served by
+                  this dashboard's data, so the filter has no use for either. */}
+              {canFilterByUploader && (
+                <button
+                  onClick={() => setUploaderFilter(prev => (prev === 'mine' ? 'all' : 'mine'))}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    uploaderFilter === 'mine'
+                      ? 'bg-cesar-navy text-white border-cesar-navy'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <Users size={16} />
+                  Uploaded by me
+                </button>
+              )}
             </div>
 
             {hasPermission('canUploadProofs') && !showUpload && (
@@ -400,7 +409,7 @@ export default function Dashboard() {
             Showing {filteredChains.length} of {stats.total} {stats.total === 1 ? 'job' : 'jobs'}
             {filter !== 'all' && ` · filtered by ${filter.replace(/_/g, ' ')}`}
             {clientFilter !== 'all' && ` · client: ${clientFilter}`}
-            {uploaderFilter === 'mine' && ` · uploaded by me`}
+            {canFilterByUploader && uploaderFilter === 'mine' && ` · uploaded by me`}
             {searchTerm && ` · search: "${searchTerm}"`}
           </p>
         </div>

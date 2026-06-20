@@ -7,7 +7,8 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp,
   Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag, Edit2,
-  ClipboardList, Store, Truck, FileCheck, CheckCircle2, History, User, FileText
+  ClipboardList, Store, Truck, FileCheck, CheckCircle2, History, User, FileText,
+  RotateCcw
 } from "lucide-react";
 import UploadProof from "./uploadProof";
 import { pdfjs } from 'react-pdf';
@@ -21,6 +22,17 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 const FINISH_OPTIONS = ['None', 'Gloss', 'Matte', 'Satin', 'Laminate', 'Other'];
 const COLOR_OPTIONS = ['Full Color', 'Spot Color', 'Black & White', 'Other'];
+
+// Statuses selectable from the manual status-override dropdown.
+// Excludes 'pending' and 'declined' — those have dedicated Approve/Decline flows.
+const OVERRIDE_STATUSES = [
+  'approved',
+  'in_production',
+  'in_quality_control',
+  'ready_for_pickup',
+  'out_for_delivery',
+  'completed',
+];
 
 // ── Progress bar stage definitions ──────────────────────────────
 function getProgressStages(fulfillment) {
@@ -165,11 +177,18 @@ export default function Modal({ project, onClose, onNavigate }) {
   const [loadingClientOrders, setLoadingClientOrders] = useState(false);
   const [clientOrdersError, setClientOrdersError] = useState(null);
 
+  // ── Status override (manual correction) state ──────────────────
+  const [showStatusOverride, setShowStatusOverride] = useState(false);
+  const [overrideStatus, setOverrideStatus] = useState(project.status);
+  const [overrideNotify, setOverrideNotify] = useState(false);
+  const [overridingStatus, setOverridingStatus] = useState(false);
+
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
   const currentRevisionNumber = project.revisionNumber || 1;
   const canEdit = isAdmin() || isDesigner();
   const canViewClientHistory = isAdmin() || isDesigner();
+  const canOverrideStatus = isAdmin() || isDesigner();
 
   // Reset local state whenever the displayed project changes (navigation)
   useEffect(() => {
@@ -187,6 +206,9 @@ export default function Modal({ project, onClose, onNavigate }) {
     setShowCommentBox(false);
     setNotes('');
     setDeclineError('');
+    setShowStatusOverride(false);
+    setOverrideStatus(project.status);
+    setOverrideNotify(false);
   }, [project.id]);
 
   // Lock body scroll when modal is open
@@ -195,6 +217,7 @@ export default function Modal({ project, onClose, onNavigate }) {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = originalOverflow; };
   }, []);
+  
 
   // Load revision history + auto-acknowledge QC + fetch available tags
   useEffect(() => {
@@ -433,6 +456,65 @@ export default function Modal({ project, onClose, onNavigate }) {
       alert(`Error updating proof status. Please try again.`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ── Manual status override (mistake correction) ────────────────
+  // Separate from handleAdvanceStatus: this is reached via the "Change
+  // status manually" link, not the guided footer buttons, and is meant
+  // for fixing a wrong click or skipped step rather than normal forward
+  // progress. It still writes the same side-effect fields the buttons
+  // would write for the target status, plus an audit note so there's a
+  // record of who changed what. Client email is suppressed by default
+  // (via skipClientEmail) since a correction usually shouldn't re-fire
+  // the same notification a normal transition would send.
+  const handleStatusOverride = async () => {
+    if (overrideStatus === project.status) {
+      setShowStatusOverride(false);
+      return;
+    }
+    setOverridingStatus(true);
+    try {
+      const updateData = {
+        status: overrideStatus,
+        updatedAt: serverTimestamp(),
+        updatedByRole: userProfile?.role || 'unknown',
+        notes_list: arrayUnion({
+          text: `Status manually changed from "${getStatusLabel(project.status)}" to "${getStatusLabel(overrideStatus)}".`,
+          authorName: userProfile?.displayName || userProfile?.email || 'Unknown',
+          authorRole: userProfile?.role || 'unknown',
+          createdAt: new Date().toISOString(),
+        }),
+      };
+
+      // Preserve the same side effects the guided buttons write for
+      // these target statuses, so an override doesn't leave the proof
+      // in a half-updated state relative to a normal transition.
+      if (overrideStatus === 'in_quality_control') {
+        updateData.qcAddedAt = serverTimestamp();
+        updateData.qcAcknowledged = false;
+      }
+      if (overrideStatus === 'in_production') {
+        updateData.productionColumn = null;
+        updateData.qcAddedAt = null;
+        updateData.qcAcknowledged = null;
+      }
+
+      if (!overrideNotify) {
+        // Cloud Function checks for this flag and skips the client email
+        // when present, then clears it back off the doc. See
+        // functions/index.js — handleProofStatusChange.
+        updateData.skipClientEmail = true;
+      }
+
+      await updateDoc(doc(db, 'proofs', project.id), updateData);
+      setShowStatusOverride(false);
+      onClose();
+    } catch (err) {
+      console.error('Error overriding status:', err);
+      alert('Error updating status. Please try again.');
+    } finally {
+      setOverridingStatus(false);
     }
   };
 
@@ -747,6 +829,70 @@ export default function Modal({ project, onClose, onNavigate }) {
                   )
                 )}
               </div>
+                
+              {/* Manual status override (admin/designer correction tool) */}
+              {canOverrideStatus && !['pending', 'declined'].includes(project.status) && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  {!showStatusOverride ? (
+                    <button
+                      onClick={() => {
+                        setOverrideStatus(project.status);
+                        setOverrideNotify(false);
+                        setShowStatusOverride(true);
+                      }}
+                      className="btn-text flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 p-0 min-h-0"
+                    >
+                      <RotateCcw size={12} />
+                      Change status manually
+                    </button>
+                  ) : (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                        Manually correct status
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={overrideStatus}
+                          onChange={e => setOverrideStatus(e.target.value)}
+                          className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy"
+                        >
+                          {OVERRIDE_STATUSES.map(s => (
+                            <option key={s} value={s}>{getStatusLabel(s)}</option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={overrideNotify}
+                            onChange={e => setOverrideNotify(e.target.checked)}
+                          />
+                          Notify client
+                        </label>
+                        <button
+                          onClick={handleStatusOverride}
+                          disabled={overridingStatus}
+                          className="px-3 py-1.5 bg-cesar-navy hover:bg-[#003070] text-white text-xs font-medium rounded-lg disabled:opacity-50"
+                        >
+                          {overridingStatus ? 'Updating...' : 'Confirm'}
+                        </button>
+                        <button
+                          onClick={() => setShowStatusOverride(false)}
+                          disabled={overridingStatus}
+                          className="btn-text text-xs text-gray-400 hover:text-gray-600 p-0 min-h-0"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {overrideStatus !== project.status && (
+                        <p className="text-xs text-gray-400 mt-2">
+                          This will change the status from "{getStatusLabel(project.status)}" to "{getStatusLabel(overrideStatus)}"
+                          {!overrideNotify ? ' without notifying the client' : ', and notify the client'}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Comments Section */}

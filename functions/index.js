@@ -507,6 +507,16 @@ exports.handleNewProof = onDocumentCreated(
 // Email rules:
 //   Admin:  approved + completed only
 //   Client: in_production (designer/admin only) + ready_for_pickup + out_for_delivery + completed
+//
+// skipClientEmail: a transient flag written by the manual status-override
+// control in Modal.jsx (admin/designer correcting a mistake rather than
+// advancing normally). When present and true, this trigger skips the
+// client-facing email entirely — corrections shouldn't silently re-fire a
+// "your order is in production" type email — and then clears the flag
+// back off the doc so it doesn't linger or affect the next real transition.
+// The admin notification email is intentionally NOT suppressed by this flag:
+// admin already gets notified on every status change today, and visibility
+// into manual overrides is useful signal rather than noise.
 exports.handleProofStatusChange = onDocumentUpdated(
   { document: 'proofs/{proofId}', secrets: [resendApiKey] },
   async (event) => {
@@ -515,8 +525,8 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
     if (beforeData.status === afterData.status) return;
 
-    const { status, updatedByRole } = afterData;
-    console.log(`📊 Proof status changed: ${beforeData.status} → ${status} (by ${updatedByRole})`);
+    const { status, updatedByRole, skipClientEmail } = afterData;
+    console.log(`📊 Proof status changed: ${beforeData.status} → ${status} (by ${updatedByRole})${skipClientEmail ? ' [manual override, client email suppressed]' : ''}`);
 
     try {
       const resend = new Resend(resendApiKey.value());
@@ -532,6 +542,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
             <p><strong>Proof:</strong> ${afterData.title}</p>
             <p><strong>Client:</strong> ${afterData.clientName || 'N/A'}</p>
             <p><strong>Status:</strong> ${beforeData.status} → ${status}</p>
+            ${skipClientEmail ? `<p><strong>Note:</strong> Manually corrected via status override — client was not notified.</p>` : ''}
             ${afterData.comments ? `<p><strong>Comments:</strong> ${afterData.comments}</p>` : ''}
             <p><strong>View:</strong> <a href="${FRONTEND_URL}">Open Dashboard</a></p>
           `,
@@ -542,6 +553,7 @@ exports.handleProofStatusChange = onDocumentUpdated(
 
       // ── Client notifications ──────────────────────────────────
       const shouldNotifyClient = (() => {
+        if (skipClientEmail) return false;
         if (status === 'in_production') {
           return updatedByRole === 'designer' || updatedByRole === 'admin';
         }
@@ -571,6 +583,12 @@ exports.handleProofStatusChange = onDocumentUpdated(
           text: `Hi ${afterData.clientName || 'there'}! Your order "${afterData.title}" is now: ${statusLabel[status]}. View at ${FRONTEND_URL}/auth`
         });
         console.log(`✅ Client notified of ${status} status`);
+      }
+
+      // Clear the transient override flag so it doesn't linger on the doc
+      // or affect the next status transition.
+      if (skipClientEmail) {
+        await event.data.after.ref.update({ skipClientEmail: FieldValue.delete() });
       }
 
     } catch (error) {
