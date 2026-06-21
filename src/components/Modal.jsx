@@ -154,6 +154,11 @@ export default function Modal({ project, onClose, onNavigate }) {
   const [editingInvoice, setEditingInvoice] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
 
+  // ── Project title (name) state ──────────────────────────────────
+  const [titleValue, setTitleValue] = useState(project.title || '');
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [savingTitle, setSavingTitle] = useState(false);
+
   // ── Print specs + fulfillment + est. completion panel state ──
   const [showSpecsPanel, setShowSpecsPanel] = useState(false);
   const [specs, setSpecs] = useState({
@@ -199,6 +204,8 @@ export default function Modal({ project, onClose, onNavigate }) {
     setProofNotes(project.notes_list || []);
     setCurrentTags(project.tags || []);
     setInvoiceNumber(project.invoiceNumber || '');
+    setTitleValue(project.title || '');
+    setEditingTitle(false);
     setSpecs({
       size: '', quantity: '', material: '', finish: 'None', colors: 'Full Color',
       dueDate: '', specialInstructions: '', ...project.printSpecs,
@@ -341,6 +348,38 @@ export default function Modal({ project, onClose, onNavigate }) {
       alert('Failed to save invoice number. Please try again.');
     } finally {
       setSavingInvoice(false);
+    }
+  };
+
+  // ── Project title (name) ──────────────────────────────────────
+  // Keeps the name in sync across every version in this revision chain
+  // (mirrors AdminProofs.jsx's saveEdit), so v1/v2/v3 of the same job
+  // never end up showing different names in Order History, the
+  // dashboard, or revision history.
+  const handleSaveTitle = async () => {
+    const trimmed = titleValue.trim();
+    if (!trimmed || trimmed === project.title) { setEditingTitle(false); return; }
+    setSavingTitle(true);
+    try {
+      await updateDoc(doc(db, 'proofs', project.id), {
+        title: trimmed,
+        updatedAt: serverTimestamp(),
+      });
+      if (project.revisionChainId) {
+        const chainSnap = await getDocs(
+          query(collection(db, 'proofs'), where('revisionChainId', '==', project.revisionChainId))
+        );
+        const siblings = chainSnap.docs.filter(d => d.id !== project.id);
+        await Promise.all(
+          siblings.map(d => updateDoc(d.ref, { title: trimmed, updatedAt: serverTimestamp() }))
+        );
+      }
+      setEditingTitle(false);
+    } catch (err) {
+      console.error('Error saving project name:', err);
+      alert('Failed to save project name. Please try again.');
+    } finally {
+      setSavingTitle(false);
     }
   };
 
@@ -715,9 +754,38 @@ export default function Modal({ project, onClose, onNavigate }) {
           {/* Header */}
           <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-center rounded-t-xl flex-shrink-0">
             <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="text-2xl font-bold text-gray-900">
-                {project.title || `Proof #${project.id?.slice(-6)}`}
-              </h2>
+              {editingTitle ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={titleValue}
+                    onChange={e => setTitleValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSaveTitle();
+                      if (e.key === 'Escape') { setTitleValue(project.title || ''); setEditingTitle(false); }
+                    }}
+                    autoFocus
+                    className="text-2xl font-bold text-gray-900 px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cesar-navy"
+                  />
+                  <button onClick={handleSaveTitle} disabled={savingTitle || !titleValue.trim()} className="p-1.5 bg-cesar-navy text-white rounded-lg hover:bg-[#003070] disabled:opacity-50">
+                    {savingTitle ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <Check size={14} />}
+                  </button>
+                  <button onClick={() => { setTitleValue(project.title || ''); setEditingTitle(false); }} className="p-1.5 text-gray-400 hover:text-gray-600">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {project.title || `Proof #${project.id?.slice(-6)}`}
+                  </h2>
+                  {canEdit && (
+                    <button onClick={() => { setTitleValue(project.title || ''); setEditingTitle(true); }} className="btn-text p-1 min-h-0 text-gray-400 hover:text-[#002855]" title="Edit project name">
+                      <Edit2 size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
               {isRevision && (
                 <span className="px-3 py-1 rounded-full text-sm font-medium bg-[#E0EAF5] text-cesar-navy border border-cesar-navy/30 flex items-center gap-1">
                   <GitBranch className="w-4 h-4" />

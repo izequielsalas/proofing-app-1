@@ -496,7 +496,7 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
                   : 'bg-white text-gray-600 border-gray-300 hover:border-cesar-navy hover:text-cesar-navy'
               }`}
             >
-              {option === 'pickup' ? '🏪 Ready for Pickup' : '🚚 Out for Delivery'}
+              {option === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
             </button>
           ))}
         </div>
