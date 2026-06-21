@@ -33,12 +33,20 @@ function buildChains(proofs) {
   return Array.from(chainMap.values());
 }
 
+// Archived is a flag, not a status — a chain whose latest revision is
+// archived gets counted under `archived` instead of its `status` bucket,
+// so the Completed card (and any other status bucket) only ever reflects
+// active, non-archived orders.
 const calcStats = (chains) =>
   chains.reduce(
     (acc, group) => {
       const latest = group[0];
       acc.total++;
-      acc[latest.status] = (acc[latest.status] || 0) + 1;
+      if (latest.archived) {
+        acc.archived = (acc.archived || 0) + 1;
+      } else {
+        acc[latest.status] = (acc[latest.status] || 0) + 1;
+      }
       return acc;
     },
     {
@@ -50,6 +58,7 @@ const calcStats = (chains) =>
       ready_for_pickup: 0,
       out_for_delivery: 0,
       completed: 0,
+      archived: 0,
       total: 0,
     }
   );
@@ -73,6 +82,7 @@ export default function Dashboard() {
     ready_for_pickup: 0,
     out_for_delivery: 0,
     completed: 0,
+    archived: 0,
     total: 0,
   });
 
@@ -134,11 +144,23 @@ export default function Dashboard() {
     return allChains
       .filter((group) => {
         const latest = group[0];
+        const isArchived = !!latest.archived;
+        // Default board ('all') is the active board: no completed, no
+        // archived. Completed and Archived are each one filter click
+        // away. Every other status branch also excludes archived, since
+        // an archived order keeps its original `status` value (archived
+        // is a flag, not a competing status) and shouldn't reappear
+        // under its old status filter once archived.
         const matchesFilter =
-          filter === 'all' ||
-          (filter === 'fulfillment'
-            ? latest.status === 'ready_for_pickup' || latest.status === 'out_for_delivery'
-            : latest.status === filter);
+          filter === 'all'
+            ? (!isArchived && latest.status !== 'completed')
+            : filter === 'archived'
+            ? isArchived
+            : filter === 'completed'
+            ? (!isArchived && latest.status === 'completed')
+            : filter === 'fulfillment'
+            ? (!isArchived && (latest.status === 'ready_for_pickup' || latest.status === 'out_for_delivery'))
+            : (!isArchived && latest.status === filter);
         const matchesClient = clientFilter === 'all' || latest.clientName === clientFilter;
         const matchesUploader = !canFilterByUploader || uploaderFilter === 'all' || latest.uploadedBy === userProfile?.uid;
         const matchesSearch =
@@ -242,6 +264,12 @@ export default function Dashboard() {
                   Manage Proofs
                 </Link>
               )}
+              {isClient() && (
+                <Link to="/my-orders" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+                  <FileText size={16} />
+                  Order History
+                </Link>
+              )}
               <div className="text-right">
                 <div className="text-sm font-medium text-gray-900">
                   {userProfile.displayName || userProfile.name || currentUser.email}
@@ -318,6 +346,7 @@ export default function Dashboard() {
                   <option value="in_quality_control">QC</option>
                   <option value="fulfillment">Fulfillment (Pickup/Delivery)</option>
                   <option value="completed">Completed</option>
+                  <option value="archived">Archived</option>
                 </select>
               </div>
 

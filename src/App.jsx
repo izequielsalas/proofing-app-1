@@ -12,6 +12,7 @@ import AcceptInvitation from './components/AcceptInvitation';
 import AdminProofs from './components/AdminProofs';
 import AdminTags from './components/AdminTags.jsx';
 import ProductionDashboard from './components/ProductionDashboard.jsx';
+import ClientOrderHistory from './components/ClientOrderHistory';
 
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
 
             {/* Protected routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/my-orders" element={<ProtectedRoute><ClientOrderHistory /></ProtectedRoute>} />
             <Route path="/gallery" element={<ProtectedRoute><ImageGallery /></ProtectedRoute>} />
             <Route path="/proof/:id" element={<ProtectedRoute><ProofViewer /></ProtectedRoute>} />
             <Route path="/admin/proofs" element={<ProtectedRoute><AdminProofs /></ProtectedRoute>} />

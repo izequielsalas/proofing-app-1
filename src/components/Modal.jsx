@@ -1,14 +1,14 @@
 // src/components/Modal.jsx - Revision System + Notes + Tags + QC + Print Specs + Fulfillment + Progress Bar + Order History
 import { motion, AnimatePresence } from "framer-motion";
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion, getDoc } from "firebase/firestore";
+import { doc, updateDoc, addDoc, serverTimestamp, collection, query, where, getDocs, orderBy, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import {
   X, Download, Check, AlertCircle, GitBranch, Upload, ChevronDown, ChevronUp,
   Factory, FlaskConical, PackageCheck, MessageSquare, Send, Tag, Edit2,
   ClipboardList, Store, Truck, FileCheck, CheckCircle2, History, User, FileText,
-  RotateCcw
+  RotateCcw, Archive, ArchiveRestore, Repeat
 } from "lucide-react";
 import UploadProof from "./uploadProof";
 import { pdfjs } from 'react-pdf';
@@ -126,7 +126,7 @@ function ProgressBar({ status, fulfillment }) {
 export default function Modal({ project, onClose, onNavigate }) {
   const stopPropagation = (e) => e.stopPropagation();
   const isPDF = project.fileUrl?.toLowerCase().includes('.pdf');
-  const { hasPermission, userProfile, isAdmin, isDesigner, isProduction, isClient } = useAuth();
+  const { currentUser, hasPermission, userProfile, isAdmin, isDesigner, isProduction, isClient } = useAuth();
   
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [notes, setNotes] = useState("");
@@ -182,6 +182,10 @@ export default function Modal({ project, onClose, onNavigate }) {
   const [overrideStatus, setOverrideStatus] = useState(project.status);
   const [overrideNotify, setOverrideNotify] = useState(false);
   const [overridingStatus, setOverridingStatus] = useState(false);
+
+  // ── Archive / Reopen / Reorder state ────────────────────────────
+  const [archiving, setArchiving] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const revisionChainId = project.revisionChainId || project.id;
   const isRevision = project.parentProofId != null;
@@ -449,6 +453,9 @@ export default function Modal({ project, onClose, onNavigate }) {
         updateData.qcAddedAt = null;
         updateData.qcAcknowledged = null;
       }
+      if (newStatus === 'completed') {
+        updateData.completedAt = serverTimestamp();
+      }
       await updateDoc(doc(db, "proofs", project.id), updateData);
       onClose();
     } catch (err) {
@@ -515,6 +522,100 @@ export default function Modal({ project, onClose, onNavigate }) {
       alert('Error updating status. Please try again.');
     } finally {
       setOverridingStatus(false);
+    }
+  };
+
+  // ── Archive (manual) ─────────────────────────────────────────
+  // Flag only — status stays 'completed', so this never re-fires the
+  // completion email and needs no new progress-bar/email branches.
+  const handleArchive = async () => {
+    setArchiving(true);
+    try {
+      await updateDoc(doc(db, 'proofs', project.id), {
+        archived: true,
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        updatedByRole: userProfile?.role || 'unknown',
+      });
+      onClose();
+    } catch (err) {
+      console.error('Error archiving order:', err);
+      alert('Failed to archive order. Please try again.');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  // ── Reopen (mistake fix) — pulls an archived order back onto the
+  // active board at in_production. Same doc, same invoice.
+  const handleReopen = async () => {
+    setArchiving(true);
+    try {
+      await updateDoc(doc(db, 'proofs', project.id), {
+        archived: false,
+        status: 'in_production',
+        updatedAt: serverTimestamp(),
+        updatedByRole: userProfile?.role || 'unknown',
+      });
+      onClose();
+    } catch (err) {
+      console.error('Error reopening order:', err);
+      alert('Failed to reopen order. Please try again.');
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  // ── Reorder — new linked doc, copies approved artwork + specs forward,
+  // starts in production right away. The original is never touched.
+  // Two-phase write so the customer email routes through the existing
+  // in_production notification (handleProofStatusChange) instead of a
+  // new sender: create at 'approved' (no email fires), then advance to
+  // 'in_production' (fires exactly one "in production" email).
+  const handleReorder = async () => {
+    setReordering(true);
+    try {
+      const newRef = await addDoc(collection(db, 'proofs'), {
+        clientId: project.clientId ?? null,
+        clientName: project.clientName ?? null,
+        clientEmail: project.clientEmail ?? null,
+        title: project.title ?? null,
+        fileUrl: project.fileUrl ?? null,
+        fileName: project.fileName ?? null,
+        originalFileName: project.originalFileName ?? null,
+        thumbnailUrl: project.thumbnailUrl ?? null,
+        printSpecs: project.printSpecs ?? null,
+        fulfillment: project.fulfillment ?? null,
+        tags: Array.from(new Set([...(project.tags || []), 'Re-Order'])),
+        reorderOf: project.id,
+        reorderRootId: project.reorderRootId || project.id,
+        status: 'approved',
+        revisionNumber: 1,
+        invoiceNumber: null,
+        estimatedCompletionDate: null,
+        productionColumn: null,
+        notes_list: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        uploadedBy: currentUser.uid,
+        updatedByRole: userProfile?.role || 'unknown',
+      });
+      // own revision chain so it's an independent card, not collapsed
+      // under the original's stack
+      await updateDoc(newRef, { revisionChainId: newRef.id });
+      // advance to in_production — fires the client email, lands on
+      // the production board
+      await updateDoc(newRef, {
+        status: 'in_production',
+        updatedAt: serverTimestamp(),
+        updatedByRole: userProfile?.role || 'unknown',
+      });
+      onClose();
+    } catch (err) {
+      console.error('Error creating reorder:', err);
+      alert('Failed to create reorder. Please try again.');
+    } finally {
+      setReordering(false);
     }
   };
 
@@ -643,6 +744,11 @@ export default function Modal({ project, onClose, onNavigate }) {
 
             {/* Progress Bar */}
             <ProgressBar status={project.status} fulfillment={project.fulfillment} />
+            {project.archived && (
+              <p className="text-xs text-gray-500 text-center mb-4 -mt-2 font-medium">
+                This order is archived.
+              </p>
+            )}
             {project.estimatedCompletionDate && (
               <p className="text-center text-xs text-gray-500 mb-4 -mt-2">
                 Estimated completion: <span className="font-medium text-gray-700">{formatShortDate(project.estimatedCompletionDate)}</span>
@@ -1082,6 +1188,28 @@ export default function Modal({ project, onClose, onNavigate }) {
               <button onClick={() => handleAdvanceStatus('in_production')} disabled={isLoading}
                 className="flex items-center gap-2 px-6 py-2 bg-cesar-orange hover:bg-[#e55d00] text-white rounded-lg disabled:opacity-50">
                 <Factory size={16} />{isLoading ? 'Updating...' : 'Return to Production'}
+              </button>
+            )}
+
+            {/* ── Archive / Reopen / Reorder ──────────────────────── */}
+            {project.status === 'completed' && !project.archived && canEdit && (
+              <button onClick={handleArchive} disabled={archiving}
+                className="flex items-center gap-2 px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg disabled:opacity-50">
+                <Archive size={16} />{archiving ? 'Archiving...' : 'Archive'}
+              </button>
+            )}
+
+            {project.archived && canEdit && (
+              <button onClick={handleReopen} disabled={archiving}
+                className="flex items-center gap-2 px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg disabled:opacity-50">
+                <ArchiveRestore size={16} />{archiving ? 'Reopening...' : 'Reopen Order'}
+              </button>
+            )}
+
+            {(project.status === 'completed' || project.archived) && canEdit && (
+              <button onClick={handleReorder} disabled={reordering}
+                className="flex items-center gap-2 px-6 py-2 bg-cesar-navy hover:bg-[#003070] text-white rounded-lg disabled:opacity-50">
+                <Repeat size={16} />{reordering ? 'Creating Reorder...' : 'Reorder'}
               </button>
             )}
           </div>

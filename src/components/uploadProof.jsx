@@ -304,11 +304,20 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
         const downloadURL = await getDownloadURL(fileRef);
         addDebugLog(`✅ File uploaded to storage: ${fileName}`);
 
+        // NOTE: every field below copied from parentProof/selectedClient (rather
+        // than constructed fresh in this function) is guarded with `?? null` /
+        // `|| null`. Firestore's addDoc()/updateDoc() reject `undefined` field
+        // values outright, and either source can legitimately lack a field
+        // (an older proof missing a field added later, or a stale/unresolved
+        // client lookup) — same failure mode that broke handleReorder() in
+        // Modal.jsx. Fields built fresh right here (fileUrl, fileName, fileType,
+        // fileSize, tags, notes, timestamps) can't be undefined, so they're left
+        // unguarded.
         const proofData = revisionMode ? {
-          title: parentProof.title,
-          clientName: parentProof.clientName,
-          clientId: parentProof.clientId,
-          clientEmail: parentProof.clientEmail,
+          title: parentProof.title ?? null,
+          clientName: parentProof.clientName ?? null,
+          clientId: parentProof.clientId ?? null,
+          clientEmail: parentProof.clientEmail ?? null,
           clientStatus: parentProof.clientStatus || 'active',
           fileUrl: downloadURL,
           fileName: fileName,
@@ -320,8 +329,8 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           invoiceNumber: invoiceNumber.trim() || null,
           fulfillment: fulfillment || null,
           notes: notes.trim(),
-          uploadedBy: user?.uid,
-          uploaderEmail: user?.email,
+          uploadedBy: user?.uid ?? null,
+          uploaderEmail: user?.email ?? null,
           createdAt: serverTimestamp(),
           assignedAt: new Date(),
           parentProofId: parentProof.id,
@@ -329,9 +338,9 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           revisionNumber: nextRevisionNumber,
         } : {
           title: projectTitle.trim(),
-          clientName: selectedClient?.displayName || selectedClient?.email,
+          clientName: selectedClient?.displayName || selectedClient?.email || null,
           clientId: selectedClientId,
-          clientEmail: selectedClient?.email,
+          clientEmail: selectedClient?.email ?? null,
           clientStatus: selectedClient?.status || 'active',
           fileUrl: downloadURL,
           fileName: fileName,
@@ -343,8 +352,8 @@ export default function UploadProof({ onUploadComplete, revisionMode = false, pa
           invoiceNumber: invoiceNumber.trim() || null,
           fulfillment: fulfillment || null,
           notes: notes.trim(),
-          uploadedBy: user?.uid,
-          uploaderEmail: user?.email,
+          uploadedBy: user?.uid ?? null,
+          uploaderEmail: user?.email ?? null,
           createdAt: serverTimestamp(),
           assignedAt: new Date(),
           parentProofId: null,
